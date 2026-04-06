@@ -12,6 +12,10 @@ out/
 # Browser "Web Page, Complete" sidecar folders (not needed for parsing tests)
 samples/*_files/
 
+# Local export tests (HTML/PDF); keep out of git
+test_exports/
+test-exports/
+
 # misc
 .DS_Store
 *.pem

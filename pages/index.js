@@ -70,18 +70,106 @@ function getSectionColor(heading) {
   return C.smoke;
 }
 
-// ── Print CSS injector ─────────────────────────────────────────────────────────
+function escapeHtmlPlain(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** Plain-text fallback for an item (email copy / legacy data without bodyHtml). */
+function itemToPlainText(item) {
+  if (item.bodyHtml) {
+    let t = item.bodyHtml.replace(/<\/(p|div|h[1-6]|li)>/gi, "\n");
+    t = t.replace(/<br\s*\/?>/gi, "\n");
+    t = t.replace(/<li[^>]*>/gi, "\n• ");
+    t = t.replace(/<[^>]+>/g, "");
+    t = t.replace(/\n{3,}/g, "\n\n").trim();
+    return t;
+  }
+  let t = item.text || "";
+  if (item.links?.length) {
+    t += "\n" + item.links.map((l) => (l.url ? `${l.label}: ${l.url}` : l.label)).join("\n");
+  }
+  return t.trim();
+}
+
+function buildSelectedBySection(newsletterData, selectedIds) {
+  return (newsletterData?.sections || [])
+    .map((sec) => ({
+      ...sec,
+      items: sec.items.filter((it) => selectedIds.has(it.id)),
+    }))
+    .filter((sec) => sec.items.length > 0);
+}
+
+function NewsletterItemBody({ item, sectionColor, appendixLinks }) {
+  if (item.bodyHtml) {
+    return (
+      <div
+        className="nl-item-body"
+        style={{
+          fontSize: 13,
+          lineHeight: 1.65,
+          color: C.ink,
+          ["--nl-accent"]: sectionColor,
+        }}
+        dangerouslySetInnerHTML={{ __html: item.bodyHtml }}
+      />
+    );
+  }
+  return (
+    <>
+      <div style={{ fontSize: 13, lineHeight: 1.65 }}>{item.text}</div>
+      {appendixLinks && item.links?.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          {item.links.map((l, i) => (
+            <span key={i} style={{ fontSize: 11, color: sectionColor, marginRight: 8, display: "inline-block" }}>
+              → {l.label}
+              {l.url ? ` (${l.url})` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Global styles: list layout in preview/cards + print (visibility trick works when #print-root is nested in #__next)
 function injectPrintStyles() {
   const id = "altag-print-styles";
   if (document.getElementById(id)) return;
   const style = document.createElement("style");
   style.id = id;
   style.textContent = `
-    @media print {
-      body > * { display: none !important; }
-      #print-root { display: block !important; }
+    .nl-item-body ul, .nl-item-body ol {
+      margin: 0.35em 0 0.5em;
+      padding-left: 1.35em;
     }
-    #print-root { display: none; }
+    .nl-item-body li { margin: 0.2em 0; }
+    .nl-item-body li > ul, .nl-item-body li > ol { margin-top: 0.25em; margin-bottom: 0.25em; }
+    .nl-item-body p { margin: 0.35em 0; }
+    .nl-item-body p:first-child { margin-top: 0; }
+    .nl-item-body p:last-child { margin-bottom: 0; }
+    .nl-item-body a { color: var(--nl-accent, #2d5016); text-decoration: underline; }
+    @media print {
+      body * { visibility: hidden; }
+      #print-root, #print-root * { visibility: visible; }
+      #print-root {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: #fff;
+      }
+      #print-root .nl-item-body a[href^="http"]::after,
+      #print-root .nl-item-body a[href^="https"]::after {
+        content: " (" attr(href) ")";
+        font-size: 9px;
+        color: #444;
+        word-break: break-all;
+      }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -239,7 +327,13 @@ function AdminView({ onDataParsed, existingData }) {
 function ItemCard({ item, selected, onToggle, sectionColor }) {
   return (
     <div
-      onClick={onToggle}
+      onClick={(e) => {
+        if (e.target.closest?.("a")) {
+          e.preventDefault();
+          return;
+        }
+        onToggle();
+      }}
       style={{
         display: "flex", gap: 12, padding: "12px 14px",
         background: selected ? sectionColor + "10" : C.cream,
@@ -263,20 +357,38 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
             {item.date}{item.time ? ` @ ${item.time}` : ""}
           </div>
         )}
-        <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, fontFamily: "Georgia, serif" }}>
-          {item.text}
-        </div>
+        {item.bodyHtml ? (
+          <div
+            className="nl-item-body"
+            style={{
+              fontSize: 13,
+              lineHeight: 1.5,
+              fontFamily: "Georgia, serif",
+              color: C.ink,
+              maxHeight: 220,
+              overflow: "auto",
+              ["--nl-accent"]: sectionColor,
+            }}
+            dangerouslySetInnerHTML={{ __html: item.bodyHtml }}
+          />
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, fontFamily: "Georgia, serif" }}>
+              {item.text}
+            </div>
+            {item.links?.length > 0 && (
+              <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {item.links.map((l, i) => (
+                  <span key={i} style={{ fontSize: 10, color: sectionColor, fontWeight: 600, background: sectionColor + "15", padding: "1px 6px", borderRadius: 3 }}>
+                    🔗 {l.label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        )}
         {item.location && (
           <div style={{ fontSize: 11, color: C.smoke, marginTop: 3 }}>📍 {item.location}</div>
-        )}
-        {item.links?.length > 0 && (
-          <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {item.links.map((l, i) => (
-              <span key={i} style={{ fontSize: 10, color: sectionColor, fontWeight: 600, background: sectionColor + "15", padding: "1px 6px", borderRadius: 3 }}>
-                🔗 {l.label}
-              </span>
-            ))}
-          </div>
         )}
       </div>
     </div>
@@ -327,10 +439,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
   const { name, tagline, headerImage, captainName, zone } = config;
   const date = newsletterData?.date || "";
 
-  const selectedBySection = (newsletterData?.sections || []).map(sec => ({
-    ...sec,
-    items: sec.items.filter(it => selectedIds.has(it.id)),
-  })).filter(sec => sec.items.length > 0);
+  const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
 
   return (
     <div style={{ fontFamily: "Georgia, serif", color: C.ink, background: C.white, maxWidth: 720, margin: "0 auto" }}>
@@ -377,14 +486,11 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
                     {item.date}{item.time ? ` @ ${item.time}` : ""}{item.location ? ` • ${item.location}` : ""}
                   </div>
                 )}
-                <div style={{ fontSize: 13, lineHeight: 1.65 }}>{item.text}</div>
-                {item.links?.length > 0 && (
-                  <div style={{ marginTop: 4 }}>
-                    {item.links.map((l, i) => (
-                      <span key={i} style={{ fontSize: 11, color: getSectionColor(sec.heading), marginRight: 8 }}>→ {l.label}{l.url ? ` (${l.url})` : ""}</span>
-                    ))}
-                  </div>
-                )}
+                <NewsletterItemBody
+                  item={item}
+                  sectionColor={getSectionColor(sec.heading)}
+                  appendixLinks={!item.bodyHtml}
+                />
               </div>
             ))}
           </div>
@@ -411,6 +517,7 @@ function CaptainView({ newsletterData }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [customEntries, setCustomEntries] = useState([]);
   const [activeSection, setActiveSection] = useState(null);
+  const [copyStatus, setCopyStatus] = useState("");
   const headerRef = useRef();
   const printRef = useRef();
 
@@ -441,6 +548,87 @@ function CaptainView({ newsletterData }) {
 
   function handlePrint() {
     window.print();
+  }
+
+  async function handleCopyForEmail() {
+    const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
+    const plainParts = [];
+    const htmlParts = [];
+    plainParts.push(config.name || "Zone Newsletter");
+    if (config.tagline) plainParts.push(config.tagline);
+    if (newsletterData?.date) plainParts.push(newsletterData.date);
+    if (config.zone) plainParts.push(config.zone);
+    if (config.captainName) plainParts.push(`Captain: ${config.captainName}`);
+    plainParts.push("");
+
+    htmlParts.push('<div style="font-family:Georgia,serif;font-size:14px;line-height:1.55;color:#1a1612;">');
+    htmlParts.push(`<p><strong>${escapeHtmlPlain(config.name || "Zone Newsletter")}</strong></p>`);
+    if (config.tagline) htmlParts.push(`<p style="color:#555">${escapeHtmlPlain(config.tagline)}</p>`);
+    if (newsletterData?.date) htmlParts.push(`<p style="color:#555">${escapeHtmlPlain(newsletterData.date)}</p>`);
+    htmlParts.push("<hr style=\"border:none;border-top:1px solid #ddd;margin:12px 0;\" />");
+
+    for (const sec of selectedBySection) {
+      const col = getSectionColor(sec.heading);
+      plainParts.push(sec.heading.toUpperCase());
+      plainParts.push("");
+      htmlParts.push(
+        `<h3 style="margin:16px 0 8px;font-size:13px;letter-spacing:0.06em;color:${escapeHtmlPlain(col)};border-bottom:2px solid ${escapeHtmlPlain(col)};padding-bottom:4px;">${escapeHtmlPlain(sec.heading)}</h3>`,
+      );
+      for (const item of sec.items) {
+        plainParts.push(itemToPlainText(item));
+        plainParts.push("");
+        htmlParts.push('<div style="margin-bottom:14px;padding-left:10px;border-left:3px solid rgba(0,0,0,0.08);">');
+        if (item.bodyHtml) {
+          htmlParts.push(item.bodyHtml);
+        } else {
+          htmlParts.push(`<p>${escapeHtmlPlain(item.text || "")}</p>`);
+          if (item.links?.length) {
+            for (const l of item.links) {
+              if (l.url) {
+                htmlParts.push(
+                  `<p style="font-size:12px;margin:4px 0;"><a href="${escapeHtmlPlain(l.url)}">${escapeHtmlPlain(l.label)}</a></p>`,
+                );
+              }
+            }
+          }
+        }
+        htmlParts.push("</div>");
+      }
+    }
+
+    customEntries.filter((e) => e.text).forEach((e) => {
+      plainParts.push(e.heading || "Update");
+      plainParts.push(e.text);
+      plainParts.push("");
+      if (e.heading) htmlParts.push(`<h3>${escapeHtmlPlain(e.heading)}</h3>`);
+      htmlParts.push(`<p style="white-space:pre-wrap;">${escapeHtmlPlain(e.text)}</p>`);
+    });
+
+    htmlParts.push(
+      "<p style=\"font-size:11px;color:#888;margin-top:20px;\">Altagether • altagether.org • newsletter@altagether.org</p>",
+    );
+    htmlParts.push("</div>");
+
+    const plain = plainParts.join("\n");
+    const html = `<!DOCTYPE html><html><body>${htmlParts.join("\n")}</body></html>`;
+
+    try {
+      if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(plain);
+      }
+      setCopyStatus("Copied. Paste into Gmail or Outlook; use Ctrl+Shift+V for plain text only if needed.");
+      setTimeout(() => setCopyStatus(""), 5000);
+    } catch (err) {
+      setCopyStatus(`Copy failed: ${err.message}`);
+      setTimeout(() => setCopyStatus(""), 6000);
+    }
   }
 
   function updateConfig(field, val) {
@@ -625,14 +813,18 @@ function CaptainView({ newsletterData }) {
               <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "Georgia, serif", color: C.ink }}>Preview & Print</div>
               <div style={{ fontSize: 12, color: C.smoke }}>{totalSelected} items selected</div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
               <Button variant="secondary" onClick={() => setStep(1)}>← Edit</Button>
+              <Button variant="secondary" onClick={handleCopyForEmail}>📋 Copy for email</Button>
               <Button onClick={handlePrint}>🖨 Print / Save PDF</Button>
             </div>
+            {copyStatus && (
+              <div style={{ marginTop: 10, fontSize: 12, color: C.forest, fontFamily: "Georgia, serif" }}>{copyStatus}</div>
+            )}
           </div>
 
           <div style={{ border: `1px solid ${C.mist}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
-            <div ref={printRef}>
+            <div id="print-root" ref={printRef}>
               <NewsletterPreview config={config} newsletterData={newsletterData} selectedIds={selectedIds} customEntries={customEntries} />
             </div>
           </div>
