@@ -22,94 +22,34 @@ const SECTION_COLORS = {
   Events: "#5B4A8A",
   Surveys: "#1A6B8A",
   "Community & Financial Support": "#8A4A1A",
+  "Ongoing Support": "#8A4A1A",
   "Case Management": "#4A6B1A",
   "In-Person Locations & Resources": "#6B1A4A",
+  "Additional Community Calendars": "#3D5A6C",
+  Links: "#4A5568",
   Other: C.smoke,
 };
 
-// ── Claude API helper ──────────────────────────────────────────────────────────
-async function parseNewsletterWithClaude(base64Data) {
-  const systemPrompt = `You are a newsletter parser. Given a PDF newsletter (rendered as images), extract ALL content and return ONLY a valid JSON object with no markdown, no backticks, no preamble.
-
-Return this exact structure:
-{
-  "title": "string - newsletter title",
-  "date": "string - publication date",
-  "nextIssue": "string - next issue date if present",
-  "deadline": "string - content deadline if present",
-  "submissionEmail": "string - email for submissions if present",
-  "sections": [
-    {
-      "id": "unique_id",
-      "heading": "Section heading text",
-      "items": [
-        {
-          "id": "unique_item_id",
-          "type": "text|event|deadline|link_item|sub_heading",
-          "text": "Full item text, preserving all details",
-          "links": [
-            {"label": "link text", "url": "url if extractable or null"}
-          ],
-          "date": "event date if applicable",
-          "time": "event time if applicable",
-          "location": "event location if applicable"
-        }
-      ]
-    }
-  ]
-}
-
-Rules:
-- Extract EVERY item, no matter how small
-- Preserve ALL hyperlink text (even if URLs aren't in the PDF text)
-- For events, extract date, time, location separately
-- Group items under their correct section headings
-- Sub-bullets belong to their parent item
-- IDs should be short unique strings like "s1", "s1i1", etc.`;
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+/** Standalone copy of pages/index.js — prefer the Next.js app for `/api/parse`. */
+async function parseNewsletterHtmlUpload(html) {
+  const response = await fetch("/api/parse", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4000,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: base64Data,
-              },
-            },
-            {
-              type: "text",
-              text: "Parse this newsletter PDF and return the JSON structure described. Extract every section, every item, every hyperlink label.",
-            },
-          ],
-        },
-      ],
-    }),
+    body: JSON.stringify({ html }),
   });
-
-  if (!response.ok) throw new Error(`API error: ${response.status}`);
-  const data = await response.json();
-  const raw = data.content.map((b) => b.text || "").join("");
-  const clean = raw.replace(/```json|```/g, "").trim();
-  return JSON.parse(clean);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+    throw new Error(err.error || `Server error: ${response.status}`);
+  }
+  return response.json();
 }
 
-// ── Utility ────────────────────────────────────────────────────────────────────
-function fileToBase64(file) {
+function fileToUtf8Text(file) {
   return new Promise((res, rej) => {
     const r = new FileReader();
-    r.onload = () => res(r.result.split(",")[1]);
+    r.onload = () => res(typeof r.result === "string" ? r.result : "");
     r.onerror = () => rej(new Error("Read failed"));
-    r.readAsDataURL(file);
+    r.readAsText(file, "UTF-8");
   });
 }
 
@@ -212,15 +152,22 @@ function AdminView({ onDataParsed, existingData }) {
   async function handleUpload() {
     if (!file) return;
     setLoading(true);
-    setStatus("Reading PDF…");
+    setStatus("Reading HTML…");
     try {
-      const b64 = await fileToBase64(file);
-      setStatus("Sending to Claude for parsing… (this takes ~15 seconds)");
-      const parsed = await parseNewsletterWithClaude(b64);
+      const html = await fileToUtf8Text(file);
+      setStatus("Parsing newsletter…");
+      const parsed = await parseNewsletterHtmlUpload(html);
       parsed._uploadedAt = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       onDataParsed(parsed);
-      setStatus(`✓ Parsed successfully! Found ${parsed.sections?.length || 0} sections.`);
+      const linkCount = (parsed.sections || []).reduce(
+        (n, sec) =>
+          n + (sec.items || []).reduce((m, it) => m + (it.links?.length || 0), 0),
+        0,
+      );
+      setStatus(
+        `✓ Parsed successfully! ${parsed.sections?.length || 0} sections, ${linkCount} links captured.`,
+      );
     } catch (e) {
       setStatus(`Error: ${e.message}`);
     }
@@ -248,7 +195,7 @@ function AdminView({ onDataParsed, existingData }) {
     <div style={{ maxWidth: 640, margin: "40px auto", padding: 32 }}>
       <div style={{ background: C.paper, border: `1px solid ${C.mist}`, borderRadius: 12, padding: 32, boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
         <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "Georgia, serif", color: C.ink, marginBottom: 4 }}>Upload New Newsletter</div>
-        <div style={{ fontSize: 13, color: C.smoke, marginBottom: 24 }}>Upload the latest issue PDF. Claude will parse every section, item, and link automatically.</div>
+        <div style={{ fontSize: 13, color: C.smoke, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. Parsing runs on the server with no API keys.</div>
 
         <div
           onClick={() => fileRef.current?.click()}
@@ -258,12 +205,12 @@ function AdminView({ onDataParsed, existingData }) {
             transition: "all 0.2s", marginBottom: 20,
           }}
         >
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📰</div>
           {file
             ? <div style={{ fontWeight: 700, color: C.forest, fontFamily: "Georgia, serif" }}>{file.name}</div>
-            : <div style={{ color: C.smoke, fontSize: 14 }}>Click to select newsletter PDF</div>
+            : <div style={{ color: C.smoke, fontSize: 14 }}>Click to select newsletter HTML (.html)</div>
           }
-          <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
+          <input ref={fileRef} type="file" accept=".html,.htm,text/html" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
         </div>
 
         <Button onClick={handleUpload} disabled={!file || loading} style={{ width: "100%" }}>

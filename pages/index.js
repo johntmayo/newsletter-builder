@@ -22,17 +22,19 @@ const SECTION_COLORS = {
   Events: "#5B4A8A",
   Surveys: "#1A6B8A",
   "Community & Financial Support": "#8A4A1A",
+  "Ongoing Support": "#8A4A1A",
   "Case Management": "#4A6B1A",
   "In-Person Locations & Resources": "#6B1A4A",
+  "Additional Community Calendars": "#3D5A6C",
+  Links: "#4A5568",
   Other: C.smoke,
 };
 
-// ── Claude API helper (calls our server-side route) ───────────────────────────
-async function parseNewsletterWithClaude(base64Data) {
+async function parseNewsletterHtmlUpload(html) {
   const response = await fetch("/api/parse", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ base64Data }),
+    body: JSON.stringify({ html }),
   });
 
   if (!response.ok) {
@@ -43,13 +45,12 @@ async function parseNewsletterWithClaude(base64Data) {
   return response.json();
 }
 
-// ── Utility ────────────────────────────────────────────────────────────────────
-function fileToBase64(file) {
+function fileToUtf8Text(file) {
   return new Promise((res, rej) => {
     const r = new FileReader();
-    r.onload = () => res(r.result.split(",")[1]);
+    r.onload = () => res(typeof r.result === "string" ? r.result : "");
     r.onerror = () => rej(new Error("Read failed"));
-    r.readAsDataURL(file);
+    r.readAsText(file, "UTF-8");
   });
 }
 
@@ -152,15 +153,22 @@ function AdminView({ onDataParsed, existingData }) {
   async function handleUpload() {
     if (!file) return;
     setLoading(true);
-    setStatus("Reading PDF…");
+    setStatus("Reading HTML…");
     try {
-      const b64 = await fileToBase64(file);
-      setStatus("Sending to Claude for parsing… (this takes ~15 seconds)");
-      const parsed = await parseNewsletterWithClaude(b64);
+      const html = await fileToUtf8Text(file);
+      setStatus("Parsing newsletter…");
+      const parsed = await parseNewsletterHtmlUpload(html);
       parsed._uploadedAt = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       onDataParsed(parsed);
-      setStatus(`✓ Parsed successfully! Found ${parsed.sections?.length || 0} sections.`);
+      const linkCount = (parsed.sections || []).reduce(
+        (n, sec) =>
+          n + (sec.items || []).reduce((m, it) => m + (it.links?.length || 0), 0),
+        0,
+      );
+      setStatus(
+        `✓ Parsed successfully! ${parsed.sections?.length || 0} sections, ${linkCount} links captured.`,
+      );
     } catch (e) {
       setStatus(`Error: ${e.message}`);
     }
@@ -188,7 +196,7 @@ function AdminView({ onDataParsed, existingData }) {
     <div style={{ maxWidth: 640, margin: "40px auto", padding: 32 }}>
       <div style={{ background: C.paper, border: `1px solid ${C.mist}`, borderRadius: 12, padding: 32, boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
         <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "Georgia, serif", color: C.ink, marginBottom: 4 }}>Upload New Newsletter</div>
-        <div style={{ fontSize: 13, color: C.smoke, marginBottom: 24 }}>Upload the latest issue PDF. Claude will parse every section, item, and link automatically.</div>
+        <div style={{ fontSize: 13, color: C.smoke, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. Parsing runs locally—no API keys, no cost—and pulls every section, item, and link from the markup.</div>
 
         <div
           onClick={() => fileRef.current?.click()}
@@ -198,12 +206,12 @@ function AdminView({ onDataParsed, existingData }) {
             transition: "all 0.2s", marginBottom: 20,
           }}
         >
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📰</div>
           {file
             ? <div style={{ fontWeight: 700, color: C.forest, fontFamily: "Georgia, serif" }}>{file.name}</div>
-            : <div style={{ color: C.smoke, fontSize: 14 }}>Click to select newsletter PDF</div>
+            : <div style={{ color: C.smoke, fontSize: 14 }}>Click to select newsletter HTML (.html)</div>
           }
-          <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
+          <input ref={fileRef} type="file" accept=".html,.htm,text/html" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
         </div>
 
         <Button onClick={handleUpload} disabled={!file || loading} style={{ width: "100%" }}>

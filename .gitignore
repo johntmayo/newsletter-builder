@@ -9,6 +9,9 @@ out/
 .env.local
 .env*.local
 
+# Browser "Web Page, Complete" sidecar folders (not needed for parsing tests)
+samples/*_files/
+
 # misc
 .DS_Store
 *.pem
