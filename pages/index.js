@@ -334,7 +334,12 @@ function Tag({ text, color }) {
 }
 
 // ── Admin View ─────────────────────────────────────────────────────────────────
-function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
+function AdminView({
+  publishedIssue,
+  unpublishedDraft,
+  onAdminIssueUpdate,
+  onDiscardDraft,
+}) {
   const [authed, setAuthed] = useState(false);
   const [adminTab, setAdminTab] = useState("upload");
   const [pw, setPw] = useState("");
@@ -342,6 +347,7 @@ function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [publishLoading, setPublishLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const fileRef = useRef();
 
@@ -367,26 +373,18 @@ function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
     }
   }
 
-  async function handleUpload() {
+  async function handleParseOnly() {
     if (!file) return;
     setLoading(true);
-    setStatus("Reading HTML…");
+    setStatus("");
     try {
       const html = await fileToUtf8Text(file);
       setStatus("Parsing newsletter…");
       const parsed = await parseNewsletterHtmlUpload(html);
       parsed._uploadedAt = new Date().toISOString();
 
-      setStatus("Saving for all visitors…");
-      const pub = await fetch("/api/publish-newsletter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pw, parsed }),
-      });
-      const pubBody = await pub.json().catch(() => ({}));
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-      onDataParsed(parsed);
+      onAdminIssueUpdate(parsed, { draftOnly: true });
+      setAdminTab("review");
 
       const linkCount = (parsed.sections || []).reduce(
         (n, sec) =>
@@ -394,20 +392,49 @@ function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
         0,
       );
 
-      if (!pub.ok) {
-        setStatus(
-          `⚠ Parsed OK, but only saved on this device — not for everyone: ${pubBody.error || `HTTP ${pub.status}`}. (${parsed.sections?.length || 0} sections, ${linkCount} links.)`,
-        );
-        return;
-      }
-
       setStatus(
-        `✓ Published for all visitors! ${parsed.sections?.length || 0} sections, ${linkCount} links captured.`,
+        `✓ Parsed (${parsed.sections?.length || 0} sections, ${linkCount} links). Review structure, then return here to publish for all visitors.`,
       );
     } catch (e) {
       setStatus(`Error: ${e.message}`);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handlePublishForEveryone() {
+    if (!unpublishedDraft) return;
+    setPublishLoading(true);
+    setStatus("");
+    try {
+      const pub = await fetch("/api/publish-newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw, parsed: unpublishedDraft }),
+      });
+      const pubBody = await pub.json().catch(() => ({}));
+
+      const linkCount = (unpublishedDraft.sections || []).reduce(
+        (n, sec) =>
+          n + (sec.items || []).reduce((m, it) => m + (it.links?.length || 0), 0),
+        0,
+      );
+
+      if (!pub.ok) {
+        setStatus(
+          `Error: could not publish — ${pubBody.error || `HTTP ${pub.status}`}. Your draft is unchanged.`,
+        );
+        return;
+      }
+
+      onAdminIssueUpdate(unpublishedDraft);
+      setStatus(
+        `✓ Published for all visitors! ${unpublishedDraft.sections?.length || 0} sections, ${linkCount} links live.`,
+      );
+    } catch (e) {
+      setStatus(`Error: ${e.message}`);
+    } finally {
+      setPublishLoading(false);
     }
   }
 
@@ -492,7 +519,35 @@ function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
       <div hidden={adminTab !== "upload"}>
         <div style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, padding: 32, boxShadow: V.cardShadow }}>
           <div style={{ fontSize: 20, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 4 }}>Upload New Newsletter</div>
-          <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. It is parsed and saved so everyone who opens the site gets this edition.</div>
+          <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>
+            Upload the MailerLite HTML export. Parse it first, fix structure on the Review tab if needed, then publish so everyone sees this edition. Until you publish, captains still load the current live issue.
+          </div>
+
+          {unpublishedDraft && (
+            <div
+              style={{
+                marginBottom: 20,
+                padding: "12px 16px",
+                background: V.greenTint08,
+                border: `2px solid ${V.border}`,
+                borderLeft: `4px solid ${V.gold}`,
+                borderRadius: 8,
+                fontSize: 13,
+                color: V.ink,
+                fontFamily: V.fontBody,
+              }}
+            >
+              <strong>Unpublished draft:</strong> {unpublishedDraft.title || "Untitled"} — {unpublishedDraft.date || "No date"}
+              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10 }}>
+                <Button onClick={handlePublishForEveryone} disabled={publishLoading}>
+                  {publishLoading ? "Publishing…" : "Publish for all visitors"}
+                </Button>
+                <Button variant="secondary" onClick={() => onDiscardDraft?.()} disabled={publishLoading}>
+                  Discard draft
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div
             onClick={() => fileRef.current?.click()}
@@ -510,8 +565,8 @@ function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
             <input ref={fileRef} type="file" accept=".html,.htm,text/html" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
           </div>
 
-          <Button onClick={handleUpload} disabled={!file || loading} style={{ width: "100%" }}>
-            {loading ? "Parsing…" : "Parse & Publish Newsletter"}
+          <Button onClick={handleParseOnly} disabled={!file || loading || publishLoading} style={{ width: "100%" }}>
+            {loading ? "Parsing…" : "Parse newsletter"}
           </Button>
 
           {status && (
@@ -520,10 +575,10 @@ function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
             </div>
           )}
 
-          {existingData && (
+          {publishedIssue && (
             <div style={{ marginTop: 24, padding: "12px 16px", background: V.border, borderRadius: 6, fontSize: 12, color: V.muted }}>
-              <strong>Current issue:</strong> {existingData.title} — {existingData.date}<br />
-              Published: {existingData._uploadedAt ? new Date(existingData._uploadedAt).toLocaleDateString() : "Unknown"}
+              <strong>Live issue (what captains see now):</strong> {publishedIssue.title} — {publishedIssue.date}<br />
+              Published: {publishedIssue._uploadedAt ? new Date(publishedIssue._uploadedAt).toLocaleDateString() : "Unknown"}
             </div>
           )}
         </div>
@@ -531,9 +586,10 @@ function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
 
       <div hidden={adminTab !== "review"}>
         <AdminReviewStructure
-          newsletterData={existingData}
+          newsletterData={unpublishedDraft ?? publishedIssue}
           password={pw}
-          onIssueUpdated={onIssueUpdated}
+          onIssueUpdated={onAdminIssueUpdate}
+          draftOnlyMode={Boolean(unpublishedDraft)}
           getSectionColor={getSectionColor}
           Button={Button}
           V={V}
@@ -1271,7 +1327,10 @@ function CaptainView({ newsletterData }) {
 // ── App Shell ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [mode, setMode] = useState("captain"); // "captain" | "admin"
+  /** Issue stored in Supabase / shown to captains */
   const [newsletterData, setNewsletterData] = useState(null);
+  /** Parsed issue not yet published (admin only) */
+  const [unpublishedDraft, setUnpublishedDraft] = useState(null);
 
   useEffect(() => {
     injectPrintStyles();
@@ -1302,9 +1361,16 @@ export default function App() {
     };
   }, []);
 
-  function handleDataParsed(data) {
+  function handleAdminIssueUpdate(data, meta) {
+    if (meta?.draftOnly) {
+      setUnpublishedDraft(data);
+      return;
+    }
     setNewsletterData(data);
-    setMode("captain");
+    setUnpublishedDraft(null);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (_) {}
   }
 
   return (
@@ -1376,14 +1442,10 @@ export default function App() {
         {mode === "admin"
           ? (
             <AdminView
-              onDataParsed={handleDataParsed}
-              existingData={newsletterData}
-              onIssueUpdated={(data) => {
-                setNewsletterData(data);
-                try {
-                  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                } catch (_) {}
-              }}
+              publishedIssue={newsletterData}
+              unpublishedDraft={unpublishedDraft}
+              onAdminIssueUpdate={handleAdminIssueUpdate}
+              onDiscardDraft={() => setUnpublishedDraft(null)}
             />
           )
           : <CaptainView newsletterData={newsletterData} />

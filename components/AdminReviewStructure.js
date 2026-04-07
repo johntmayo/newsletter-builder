@@ -13,7 +13,8 @@ import {
  * @param {{
  *   newsletterData: object | null,
  *   password: string,
- *   onIssueUpdated: (data: object) => void,
+ *   onIssueUpdated: (data: object, meta?: { draftOnly?: boolean }) => void,
+ *   draftOnlyMode?: boolean,
  *   getSectionColor: (heading: string) => string,
  *   Button: import('react').ComponentType<any>,
  *   V: Record<string, string>,
@@ -24,6 +25,7 @@ export default function AdminReviewStructure({
   newsletterData,
   password,
   onIssueUpdated,
+  draftOnlyMode = false,
   getSectionColor,
   Button,
   V,
@@ -67,7 +69,7 @@ export default function AdminReviewStructure({
           textAlign: "center",
         }}
       >
-        No issue loaded yet. Upload and publish a newsletter first, then return here to fix how items are split.
+        No issue loaded yet. Upload a newsletter (parse from the Upload issue tab), or wait until an edition is published, then return here to fix how items are split.
       </div>
     );
   }
@@ -77,6 +79,12 @@ export default function AdminReviewStructure({
     setSaving(true);
     setSaveStatus("");
     try {
+      if (draftOnlyMode) {
+        onIssueUpdated?.(draft, { draftOnly: true });
+        setSaveStatus("✓ Draft saved. Go to Upload issue and click Publish for all visitors when this edition should go live.");
+        setSaving(false);
+        return;
+      }
       const response = await fetch("/api/save-issue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -104,6 +112,9 @@ export default function AdminReviewStructure({
   function applyDraft(next) {
     setDraft(next);
     setSaveStatus("");
+    if (draftOnlyMode) {
+      onIssueUpdated?.(next, { draftOnly: true });
+    }
   }
 
   return (
@@ -112,11 +123,13 @@ export default function AdminReviewStructure({
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink }}>Review issue structure</div>
           <div style={{ fontSize: 13, color: V.muted, marginTop: 4, maxWidth: 520 }}>
-            Merge items that were split incorrectly, or split an item that was merged with the next story. Changes are not public until you save.
+            {draftOnlyMode
+              ? "Merge or split items as needed. This is a private draft until you publish from the Upload issue tab."
+              : "Merge items that were split incorrectly, or split an item that was merged with the next story. Changes are not public until you save."}
           </div>
         </div>
         <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save structure for everyone"}
+          {saving ? "Saving…" : draftOnlyMode ? "Save structure (draft)" : "Save structure for everyone"}
         </Button>
       </div>
 
