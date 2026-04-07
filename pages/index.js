@@ -80,6 +80,18 @@ function getSectionColor(heading) {
   return SECTION_COLORS.Other;
 }
 
+/** Matches --accent-clay (for borders where CSS vars cannot be concatenated). */
+const CLAY_HEX = "#bc5838";
+
+/** One section title for all captain-authored zone updates (preview / email / PDF). */
+function zoneUpdatesSectionTitle(zone, newsletterName) {
+  const z = (zone || "").trim();
+  if (z) return `${z} Updates`;
+  const n = (newsletterName || "").trim();
+  if (n) return `${n} Updates`;
+  return "Zone updates";
+}
+
 function escapeHtmlPlain(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -206,6 +218,33 @@ function injectPrintStyles() {
         top: 0;
         width: 100%;
         background: #fff;
+      }
+      /* PDF / print: force dark text on white so tagline and meta stay legible without background graphics. */
+      #print-root .nl-print-header {
+        background: #fff !important;
+        color: #1f2937 !important;
+        border-bottom: 3px solid #314059 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      #print-root .nl-print-header .nl-print-header-title {
+        color: #111827 !important;
+        opacity: 1 !important;
+      }
+      #print-root .nl-print-header .nl-print-header-tagline {
+        color: #374151 !important;
+        opacity: 1 !important;
+      }
+      #print-root .nl-print-header .nl-print-header-meta {
+        color: #374151 !important;
+        opacity: 1 !important;
+      }
+      #print-root .nl-print-header .nl-print-header-curated {
+        color: #4b5563 !important;
+        opacity: 1 !important;
+      }
+      #print-root .nl-print-header .nl-print-header-rule {
+        border-top-color: #d1d5db !important;
       }
     }
   `;
@@ -580,7 +619,7 @@ function CustomEntryEditor({ entries, onChange }) {
         <div key={e.id} style={{ marginBottom: 12, background: V.inputBg, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, padding: 14 }}>
           <input
             value={e.heading} onChange={ev => update(e.id, "heading", ev.target.value)}
-            placeholder="Section heading (e.g. Zone 4 Updates)"
+            placeholder="Optional title for this update (one line)"
             style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, marginBottom: 8, boxSizing: "border-box", background: V.card }}
           />
           <textarea
@@ -603,8 +642,9 @@ function CustomEntryEditor({ entries, onChange }) {
 
 // ── Preview / Print output ─────────────────────────────────────────────────────
 function NewsletterPreview({ config, newsletterData, selectedIds, customEntries }) {
-  const { name, tagline, headerImage, captainName, zone } = config;
+  const { name, tagline, headerImage, captainName, zone, howToReach, zoneLinks } = config;
   const date = newsletterData?.date || "";
+  const hasContact = Boolean((howToReach || "").trim() || (zoneLinks || "").trim());
 
   const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
 
@@ -614,31 +654,94 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
       {headerImage && (
         <img src={headerImage} alt="Header" style={{ width: "100%", maxHeight: 200, objectFit: "cover", display: "block" }} />
       )}
-      <div style={{ background: V.navy, padding: "24px 32px", color: V.white }}>
-        <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.03em", fontFamily: V.fontDisplay }}>{name || "Zone Newsletter"}</div>
-        {tagline && <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>{tagline}</div>}
-        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+      <div className="nl-print-header" style={{ background: V.navy, padding: "24px 32px", color: V.white }}>
+        <div className="nl-print-header-title" style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.03em", fontFamily: V.fontDisplay }}>{name || "Zone Newsletter"}</div>
+        {tagline && (
+          <div className="nl-print-header-tagline" style={{ fontSize: 14, opacity: 0.92, marginTop: 4 }}>
+            {tagline}
+          </div>
+        )}
+        <div className="nl-print-header-meta" style={{ fontSize: 12, opacity: 0.88, marginTop: 8 }}>
           {date && `${date} • `}
           {zone && `${zone} • `}
           {captainName && `Captain: ${captainName}`}
         </div>
-        <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7, borderTop: "1px solid rgba(255,255,255,0.2)", paddingTop: 10 }}>
+        <div
+          className="nl-print-header-curated nl-print-header-rule"
+          style={{ marginTop: 12, fontSize: 12, opacity: 0.88, borderTop: "1px solid rgba(255,255,255,0.28)", paddingTop: 10 }}
+        >
           Curated from the Altagether Neighborhood Captain Newsletter
         </div>
       </div>
 
+      {hasContact && (
+        <div
+          className="nl-print-contact"
+          style={{
+            padding: "18px 32px",
+            background: V.inputBg,
+            borderBottom: `1px solid ${V.border}`,
+            fontFamily: V.fontBody,
+          }}
+        >
+          {(howToReach || "").trim() ? (
+            <div style={{ fontSize: 13, lineHeight: 1.55, color: V.ink }}>
+              <span style={{ fontWeight: 700, fontFamily: V.fontDisplay }}>How to reach you: </span>
+              {(howToReach || "").trim()}
+            </div>
+          ) : null}
+          {(zoneLinks || "").trim() ? (
+            <div
+              style={{
+                fontSize: 13,
+                lineHeight: 1.55,
+                color: V.ink,
+                marginTop: (howToReach || "").trim() ? 10 : 0,
+              }}
+            >
+              <span style={{ fontWeight: 700, fontFamily: V.fontDisplay }}>Website, Facebook, WhatsApp, etc.: </span>
+              {(zoneLinks || "").trim()}
+            </div>
+          ) : null}
+        </div>
+      )}
+
       <div style={{ padding: "0 32px 32px" }}>
-        {/* Custom entries */}
-        {customEntries.filter(e => e.text).map(e => (
-          <div key={e.id} style={{ marginTop: 28 }}>
-            {e.heading && (
-              <div style={{ fontSize: 17, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, borderBottom: `2px solid ${V.clay}`, paddingBottom: 6, marginBottom: 14, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                {e.heading}
+        {/* Zone updates: one section title, entries styled like newsletter item cards */}
+        {customEntries.filter((e) => e.text).length > 0 && (
+          <div style={{ marginTop: 28 }}>
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 800,
+                fontFamily: V.fontDisplay,
+                color: CLAY_HEX,
+                borderBottom: `2px solid ${CLAY_HEX}`,
+                paddingBottom: 6,
+                marginBottom: 14,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              {zoneUpdatesSectionTitle(zone, name)}
+            </div>
+            {customEntries.filter((e) => e.text).map((e) => (
+              <div
+                key={e.id}
+                style={{
+                  marginBottom: 14,
+                  paddingLeft: 12,
+                  borderLeft: `3px solid ${CLAY_HEX}4d`,
+                }}
+              >
+                {e.heading ? (
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: V.fontBody, color: V.ink, marginBottom: 6 }}>{e.heading}</div>
+                ) : null}
+                <div style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-wrap", color: V.ink, fontFamily: V.fontBody }}>{e.text}</div>
               </div>
-            )}
-            <div style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-wrap" }}>{e.text}</div>
+            ))}
           </div>
-        ))}
+        )}
 
         {/* Selected items from newsletter */}
         {selectedBySection.map(sec => (
@@ -680,7 +783,15 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
 // ── Captain Builder View ───────────────────────────────────────────────────────
 function CaptainView({ newsletterData }) {
   const [step, setStep] = useState(0); // 0=config, 1=select, 2=preview
-  const [config, setConfig] = useState({ name: "", tagline: "", captainName: "", zone: "", headerImage: null });
+  const [config, setConfig] = useState({
+    name: "",
+    tagline: "",
+    captainName: "",
+    zone: "",
+    howToReach: "",
+    zoneLinks: "",
+    headerImage: null,
+  });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [customEntries, setCustomEntries] = useState([]);
   const [activeSection, setActiveSection] = useState(null);
@@ -727,6 +838,10 @@ function CaptainView({ newsletterData }) {
     if (newsletterData?.date) plainParts.push(newsletterData.date);
     if (config.zone) plainParts.push(config.zone);
     if (config.captainName) plainParts.push(`Captain: ${config.captainName}`);
+    const reachPlain = (config.howToReach || "").trim();
+    const zlPlain = (config.zoneLinks || "").trim();
+    if (reachPlain) plainParts.push(`How to reach you: ${reachPlain}`);
+    if (zlPlain) plainParts.push(`Website, Facebook, WhatsApp, etc.: ${zlPlain}`);
     plainParts.push("");
 
     htmlParts.push('<div style="font-family:Merriweather,Georgia,serif;font-size:14px;line-height:1.55;color:#1f2937;">');
@@ -734,32 +849,55 @@ function CaptainView({ newsletterData }) {
       `<p style="margin:0 0 6px;"><strong style="font-size:20px;line-height:1.2;">${escapeHtmlPlain(config.name || "Zone Newsletter")}</strong></p>`,
     );
     if (config.tagline) {
-      htmlParts.push(`<p style="margin:0 0 10px;color:#555;">${escapeHtmlPlain(config.tagline)}</p>`);
+      htmlParts.push(`<p style="margin:0 0 10px;color:#374151;">${escapeHtmlPlain(config.tagline)}</p>`);
     }
     const metaBits = [];
     if (newsletterData?.date) metaBits.push(escapeHtmlPlain(newsletterData.date));
     if (config.zone) metaBits.push(escapeHtmlPlain(config.zone));
     if (config.captainName) metaBits.push(`Captain: ${escapeHtmlPlain(config.captainName)}`);
     if (metaBits.length) {
-      htmlParts.push(`<p style="margin:0 0 10px;color:#555;font-size:13px;">${metaBits.join(" • ")}</p>`);
+      htmlParts.push(`<p style="margin:0 0 10px;color:#374151;font-size:13px;">${metaBits.join(" • ")}</p>`);
     }
     htmlParts.push(
-      '<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#666;font-size:12px;line-height:1.45;">Curated from the Altagether Neighborhood Captain Newsletter</p>',
+      '<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;line-height:1.45;">Curated from the Altagether Neighborhood Captain Newsletter</p>',
     );
+    const reach = reachPlain;
+    const zl = zlPlain;
+    if (reach) {
+      htmlParts.push(
+        `<p style="margin:0 0 8px;font-size:13px;line-height:1.55;color:#1f2937;"><strong>How to reach you:</strong> ${escapeHtmlPlain(reach)}</p>`,
+      );
+    }
+    if (zl) {
+      htmlParts.push(
+        `<p style="margin:0 0 14px;font-size:13px;line-height:1.55;color:#1f2937;"><strong>Website, Facebook, WhatsApp, etc.:</strong> ${escapeHtmlPlain(zl)}</p>`,
+      );
+    }
     htmlParts.push("<hr style=\"border:none;border-top:1px solid #ddd;margin:12px 0;\" />");
 
-    customWithText.forEach((e, i) => {
-      plainParts.push(e.heading || "Update");
-      plainParts.push(e.text);
+    if (customWithText.length > 0) {
+      const zuTitle = zoneUpdatesSectionTitle(config.zone, config.name);
+      plainParts.push(zuTitle.toUpperCase());
       plainParts.push("");
-      if (e.heading) {
+      customWithText.forEach((e) => {
+        if (e.heading) plainParts.push(e.heading);
+        plainParts.push(e.text);
+        plainParts.push("");
+      });
+      htmlParts.push(
+        `<h3 style="margin:18px 0 8px;font-size:17px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:${CLAY_HEX};border-bottom:2px solid ${CLAY_HEX};padding-bottom:5px;line-height:1.25;">${escapeHtmlPlain(zuTitle)}</h3>`,
+      );
+      customWithText.forEach((e) => {
         htmlParts.push(
-          `<h3 style="margin:18px 0 10px;font-size:16px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#bc5838;border-bottom:2px solid #bc5838;padding-bottom:4px;">${escapeHtmlPlain(e.heading)}</h3>`,
+          `<div style="margin-bottom:12px;padding-left:10px;border-left:3px solid rgba(188,88,56,0.25);">`,
         );
-      }
-      const bodyTop = i === 0 && !e.heading ? "12px" : "0";
-      htmlParts.push(`<p style="white-space:pre-wrap;margin:${bodyTop} 0 16px;">${escapeHtmlPlain(e.text)}</p>`);
-    });
+        if (e.heading) {
+          htmlParts.push(`<p style="font-weight:700;margin:0 0 6px;font-size:14px;color:#1f2937;">${escapeHtmlPlain(e.heading)}</p>`);
+        }
+        htmlParts.push(`<p style="white-space:pre-wrap;margin:0;font-size:14px;line-height:1.75;color:#1f2937;">${escapeHtmlPlain(e.text)}</p>`);
+        htmlParts.push("</div>");
+      });
+    }
 
     for (const sec of selectedBySection) {
       const col = getSectionColor(sec.heading);
@@ -882,6 +1020,30 @@ function CaptainView({ newsletterData }) {
               />
             </div>
           ))}
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              How to reach you (optional)
+            </label>
+            <input
+              value={config.howToReach}
+              onChange={(e) => updateConfig("howToReach", e.target.value)}
+              placeholder="e.g. Email, phone, or how neighbors can contact you"
+              style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Website, Facebook, WhatsApp, etc. (optional)
+            </label>
+            <input
+              value={config.zoneLinks}
+              onChange={(e) => updateConfig("zoneLinks", e.target.value)}
+              placeholder="e.g. Zone website, Facebook group, WhatsApp channel — if any"
+              style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
+            />
+          </div>
 
           <div style={{ marginBottom: 24 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>Header Image (optional)</label>
