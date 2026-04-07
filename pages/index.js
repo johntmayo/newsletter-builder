@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { repairLegacyAmpDoubling } from "../lib/sanitizeMailerLiteHtml";
 
 // ── Design tokens (CSS vars — see styles/globals.css & altagether-subpage-style.md)
-const ADMIN_PASSWORD = "altagether2025";
 const STORAGE_KEY = "altagether_newsletter_data";
 
 const V = {
@@ -276,11 +275,29 @@ function AdminView({ onDataParsed, existingData }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
   const fileRef = useRef();
 
-  function handleLogin() {
-    if (pw === ADMIN_PASSWORD) { setAuthed(true); setPwError(""); }
-    else setPwError("Incorrect password.");
+  async function handleLogin() {
+    setPwError("");
+    setLoginLoading(true);
+    try {
+      const response = await fetch("/api/verify-admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (response.ok) {
+        setAuthed(true);
+        return;
+      }
+      const err = await response.json().catch(() => ({}));
+      setPwError(err.error || "Incorrect password.");
+    } catch {
+      setPwError("Could not reach the server. Check your connection.");
+    } finally {
+      setLoginLoading(false);
+    }
   }
 
   async function handleUpload() {
@@ -292,20 +309,39 @@ function AdminView({ onDataParsed, existingData }) {
       setStatus("Parsing newsletter…");
       const parsed = await parseNewsletterHtmlUpload(html);
       parsed._uploadedAt = new Date().toISOString();
+
+      setStatus("Saving for all visitors…");
+      const pub = await fetch("/api/publish-newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw, parsed }),
+      });
+      const pubBody = await pub.json().catch(() => ({}));
+
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       onDataParsed(parsed);
+
       const linkCount = (parsed.sections || []).reduce(
         (n, sec) =>
           n + (sec.items || []).reduce((m, it) => m + (it.links?.length || 0), 0),
         0,
       );
+
+      if (!pub.ok) {
+        setStatus(
+          `⚠ Parsed OK, but only saved on this device — not for everyone: ${pubBody.error || `HTTP ${pub.status}`}. (${parsed.sections?.length || 0} sections, ${linkCount} links.)`,
+        );
+        return;
+      }
+
       setStatus(
-        `✓ Parsed successfully! ${parsed.sections?.length || 0} sections, ${linkCount} links captured.`,
+        `✓ Published for all visitors! ${parsed.sections?.length || 0} sections, ${linkCount} links captured.`,
       );
     } catch (e) {
       setStatus(`Error: ${e.message}`);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   if (!authed) {
@@ -320,7 +356,9 @@ function AdminView({ onDataParsed, existingData }) {
           style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
         />
         {pwError && <div style={{ color: V.clay, fontSize: 12, marginTop: 6 }}>{pwError}</div>}
-        <Button onClick={handleLogin} style={{ marginTop: 14, width: "100%" }}>Sign In</Button>
+        <Button onClick={handleLogin} disabled={loginLoading} style={{ marginTop: 14, width: "100%" }}>
+          {loginLoading ? "Checking…" : "Sign In"}
+        </Button>
       </div>
     );
   }
@@ -329,7 +367,7 @@ function AdminView({ onDataParsed, existingData }) {
     <div style={{ maxWidth: 640, margin: "40px auto", padding: 32 }}>
       <div style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, padding: 32, boxShadow: V.cardShadow }}>
         <div style={{ fontSize: 20, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 4 }}>Upload New Newsletter</div>
-        <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. Parsing runs locally—no API keys, no cost—and pulls every section, item, and link from the markup.</div>
+        <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. It is parsed and saved so everyone who opens the site gets this edition.</div>
 
         <div
           onClick={() => fileRef.current?.click()}
@@ -923,10 +961,31 @@ export default function App() {
 
   useEffect(() => {
     injectPrintStyles();
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) setNewsletterData(JSON.parse(saved));
-    } catch (e) {}
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/current-issue");
+        if (cancelled) return;
+        if (response.ok) {
+          const body = await response.json();
+          if (body?.data) {
+            setNewsletterData(body.data);
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(body.data));
+            } catch (_) {}
+            return;
+          }
+        }
+      } catch (_) {}
+      if (cancelled) return;
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) setNewsletterData(JSON.parse(saved));
+      } catch (_) {}
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function handleDataParsed(data) {
