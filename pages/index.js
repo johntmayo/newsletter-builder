@@ -244,7 +244,7 @@ function Logo({ onDark = false }) {
           onError={() => setImgOk(false)}
         />
       ) : null}
-      <span style={titleStyle}>Newsletter builder</span>
+      <span style={titleStyle}>Newsletter Builder</span>
     </div>
   );
 }
