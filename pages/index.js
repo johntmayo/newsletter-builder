@@ -92,6 +92,21 @@ function zoneUpdatesSectionTitle(zone, newsletterName) {
   return "Zone updates";
 }
 
+/** @param {{ id?: string, name?: string, contact?: string }[]} captains */
+function captainsWithContent(captains) {
+  if (!Array.isArray(captains)) return [];
+  return captains.filter((c) => (c.name || "").trim() || (c.contact || "").trim());
+}
+
+/** Reader-facing line: name — contact, or whichever is filled. */
+function formatCaptainLine(c) {
+  const n = (c.name || "").trim();
+  const t = (c.contact || "").trim();
+  if (n && t) return `${n} — ${t}`;
+  if (n) return n;
+  return t;
+}
+
 function escapeHtmlPlain(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -245,6 +260,10 @@ function injectPrintStyles() {
       }
       #print-root .nl-print-header .nl-print-header-rule {
         border-top-color: #d1d5db !important;
+      }
+      #print-root .nl-print-header .nl-print-header-captains {
+        color: #374151 !important;
+        opacity: 1 !important;
       }
     }
   `;
@@ -642,9 +661,11 @@ function CustomEntryEditor({ entries, onChange }) {
 
 // ── Preview / Print output ─────────────────────────────────────────────────────
 function NewsletterPreview({ config, newsletterData, selectedIds, customEntries }) {
-  const { name, tagline, headerImage, captainName, zone, howToReach, zoneLinks } = config;
+  const { name, tagline, headerImage, zone, zoneLinks, captains } = config;
   const date = newsletterData?.date || "";
-  const hasContact = Boolean((howToReach || "").trim() || (zoneLinks || "").trim());
+  const captainLines = captainsWithContent(captains);
+  const zl = (zoneLinks || "").trim();
+  const hasLinksStrip = Boolean(zl);
 
   const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
 
@@ -661,11 +682,21 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
             {tagline}
           </div>
         )}
-        <div className="nl-print-header-meta" style={{ fontSize: 12, opacity: 0.88, marginTop: 8 }}>
-          {date && `${date} • `}
-          {zone && `${zone} • `}
-          {captainName && `Captain: ${captainName}`}
-        </div>
+        {(date || zone) ? (
+          <div className="nl-print-header-meta" style={{ fontSize: 12, opacity: 0.88, marginTop: 8 }}>
+            {[date, zone].filter(Boolean).join(" • ")}
+          </div>
+        ) : null}
+        {captainLines.length > 0 ? (
+          <div
+            className="nl-print-header-captains"
+            style={{ marginTop: 10, fontSize: 13, opacity: 0.92, lineHeight: 1.55, fontFamily: V.fontBody }}
+          >
+            {captainLines.map((c, i) => (
+              <div key={c.id || i}>{formatCaptainLine(c)}</div>
+            ))}
+          </div>
+        ) : null}
         <div
           className="nl-print-header-curated nl-print-header-rule"
           style={{ marginTop: 12, fontSize: 12, opacity: 0.88, borderTop: "1px solid rgba(255,255,255,0.28)", paddingTop: 10 }}
@@ -674,7 +705,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         </div>
       </div>
 
-      {hasContact && (
+      {hasLinksStrip ? (
         <div
           className="nl-print-contact"
           style={{
@@ -682,29 +713,14 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
             background: V.inputBg,
             borderBottom: `1px solid ${V.border}`,
             fontFamily: V.fontBody,
+            fontSize: 13,
+            lineHeight: 1.55,
+            color: V.ink,
           }}
         >
-          {(howToReach || "").trim() ? (
-            <div style={{ fontSize: 13, lineHeight: 1.55, color: V.ink }}>
-              <span style={{ fontWeight: 700, fontFamily: V.fontDisplay }}>How to reach you: </span>
-              {(howToReach || "").trim()}
-            </div>
-          ) : null}
-          {(zoneLinks || "").trim() ? (
-            <div
-              style={{
-                fontSize: 13,
-                lineHeight: 1.55,
-                color: V.ink,
-                marginTop: (howToReach || "").trim() ? 10 : 0,
-              }}
-            >
-              <span style={{ fontWeight: 700, fontFamily: V.fontDisplay }}>Website, Facebook, WhatsApp, etc.: </span>
-              {(zoneLinks || "").trim()}
-            </div>
-          ) : null}
+          {zl}
         </div>
-      )}
+      ) : null}
 
       <div style={{ padding: "0 32px 32px" }}>
         {/* Zone updates: one section title, entries styled like newsletter item cards */}
@@ -786,9 +802,8 @@ function CaptainView({ newsletterData }) {
   const [config, setConfig] = useState({
     name: "",
     tagline: "",
-    captainName: "",
     zone: "",
-    howToReach: "",
+    captains: [{ id: "c1", name: "", contact: "" }],
     zoneLinks: "",
     headerImage: null,
   });
@@ -837,11 +852,11 @@ function CaptainView({ newsletterData }) {
     if (config.tagline) plainParts.push(config.tagline);
     if (newsletterData?.date) plainParts.push(newsletterData.date);
     if (config.zone) plainParts.push(config.zone);
-    if (config.captainName) plainParts.push(`Captain: ${config.captainName}`);
-    const reachPlain = (config.howToReach || "").trim();
+    for (const c of captainsWithContent(config.captains)) {
+      plainParts.push(formatCaptainLine(c));
+    }
     const zlPlain = (config.zoneLinks || "").trim();
-    if (reachPlain) plainParts.push(`How to reach you: ${reachPlain}`);
-    if (zlPlain) plainParts.push(`Website, Facebook, WhatsApp, etc.: ${zlPlain}`);
+    if (zlPlain) plainParts.push(zlPlain);
     plainParts.push("");
 
     htmlParts.push('<div style="font-family:Merriweather,Georgia,serif;font-size:14px;line-height:1.55;color:#1f2937;">');
@@ -854,24 +869,20 @@ function CaptainView({ newsletterData }) {
     const metaBits = [];
     if (newsletterData?.date) metaBits.push(escapeHtmlPlain(newsletterData.date));
     if (config.zone) metaBits.push(escapeHtmlPlain(config.zone));
-    if (config.captainName) metaBits.push(`Captain: ${escapeHtmlPlain(config.captainName)}`);
     if (metaBits.length) {
       htmlParts.push(`<p style="margin:0 0 10px;color:#374151;font-size:13px;">${metaBits.join(" • ")}</p>`);
+    }
+    for (const c of captainsWithContent(config.captains)) {
+      htmlParts.push(
+        `<p style="margin:0 0 4px;font-size:13px;line-height:1.55;color:#1f2937;">${escapeHtmlPlain(formatCaptainLine(c))}</p>`,
+      );
     }
     htmlParts.push(
       '<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;line-height:1.45;">Curated from the Altagether Neighborhood Captain Newsletter</p>',
     );
-    const reach = reachPlain;
     const zl = zlPlain;
-    if (reach) {
-      htmlParts.push(
-        `<p style="margin:0 0 8px;font-size:13px;line-height:1.55;color:#1f2937;"><strong>How to reach you:</strong> ${escapeHtmlPlain(reach)}</p>`,
-      );
-    }
     if (zl) {
-      htmlParts.push(
-        `<p style="margin:0 0 14px;font-size:13px;line-height:1.55;color:#1f2937;"><strong>Website, Facebook, WhatsApp, etc.:</strong> ${escapeHtmlPlain(zl)}</p>`,
-      );
+      htmlParts.push(`<p style="margin:0 0 14px;font-size:13px;line-height:1.55;color:#1f2937;">${escapeHtmlPlain(zl)}</p>`);
     }
     htmlParts.push("<hr style=\"border:none;border-top:1px solid #ddd;margin:12px 0;\" />");
 
@@ -959,6 +970,27 @@ function CaptainView({ newsletterData }) {
     setConfig(prev => ({ ...prev, [field]: val }));
   }
 
+  function setCaptainField(id, field, val) {
+    setConfig((prev) => ({
+      ...prev,
+      captains: prev.captains.map((c) => (c.id === id ? { ...c, [field]: val } : c)),
+    }));
+  }
+
+  function addCaptain() {
+    setConfig((prev) => ({
+      ...prev,
+      captains: [...prev.captains, { id: `c_${Date.now()}`, name: "", contact: "" }],
+    }));
+  }
+
+  function removeCaptain(id) {
+    setConfig((prev) => ({
+      ...prev,
+      captains: prev.captains.length <= 1 ? prev.captains : prev.captains.filter((c) => c.id !== id),
+    }));
+  }
+
   const visibleSelectedCount = countCaptainVisibleSelected(newsletterData, selectedIds);
   const totalSelected = visibleSelectedCount + customEntries.filter(e => e.text).length;
 
@@ -1008,7 +1040,6 @@ function CaptainView({ newsletterData }) {
           {[
             { field: "name", label: "Newsletter Name", placeholder: "e.g. Zone 4 Neighbor Update" },
             { field: "tagline", label: "Tagline (optional)", placeholder: "e.g. News for Loma Alta neighbors" },
-            { field: "captainName", label: "Your Name", placeholder: "Neighborhood Captain name" },
             { field: "zone", label: "Zone / Neighborhood", placeholder: "e.g. Zone 4 — Loma Alta" },
           ].map(({ field, label, placeholder }) => (
             <div key={field} style={{ marginBottom: 16 }}>
@@ -1021,16 +1052,55 @@ function CaptainView({ newsletterData }) {
             </div>
           ))}
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              How to reach you (optional)
-            </label>
-            <input
-              value={config.howToReach}
-              onChange={(e) => updateConfig("howToReach", e.target.value)}
-              placeholder="e.g. Email, phone, or how neighbors can contact you"
-              style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
-            />
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 10, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Captains (optional)
+            </div>
+            {config.captains.map((c, idx) => (
+              <div
+                key={c.id}
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  alignItems: "flex-end",
+                  marginBottom: 10,
+                  paddingBottom: 10,
+                  borderBottom: idx < config.captains.length - 1 ? `1px solid ${V.border}` : "none",
+                }}
+              >
+                <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, fontFamily: V.fontDisplay, color: V.muted, marginBottom: 4, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    Captain
+                  </label>
+                  <input
+                    value={c.name}
+                    onChange={(e) => setCaptainField(c.id, "name", e.target.value)}
+                    placeholder="Name"
+                    style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
+                  />
+                </div>
+                <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, fontFamily: V.fontDisplay, color: V.muted, marginBottom: 4, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    How to contact
+                  </label>
+                  <input
+                    value={c.contact}
+                    onChange={(e) => setCaptainField(c.id, "contact", e.target.value)}
+                    placeholder="Phone, email, etc."
+                    style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
+                  />
+                </div>
+                {config.captains.length > 1 ? (
+                  <Button variant="danger" type="button" onClick={() => removeCaptain(c.id)} style={{ fontSize: 11, padding: "8px 12px", flex: "0 0 auto" }}>
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+            <Button variant="ghost" type="button" onClick={addCaptain} style={{ width: "100%", padding: "9px", fontSize: 12 }}>
+              + Add a captain
+            </Button>
           </div>
 
           <div style={{ marginBottom: 24 }}>
