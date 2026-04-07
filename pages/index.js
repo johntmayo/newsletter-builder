@@ -86,6 +86,22 @@ function escapeHtmlPlain(s) {
     .replace(/>/g, "&gt;");
 }
 
+/** Inline tight list/paragraph spacing for email paste (client defaults are often very loose). */
+function augmentEmailItemBodyHtml(fragment) {
+  function patchOpeningTag(tag, style) {
+    return (match, attrs) => {
+      const a = attrs || "";
+      if (/style\s*=/i.test(a)) return match;
+      return `<${tag}${a} style="${style}">`;
+    };
+  }
+  return String(fragment)
+    .replace(/<ul\b([^>]*)>/gi, patchOpeningTag("ul", "margin:4px 0 6px;padding-left:1.2em;list-style-position:outside;"))
+    .replace(/<ol\b([^>]*)>/gi, patchOpeningTag("ol", "margin:4px 0 6px;padding-left:1.2em;list-style-position:outside;"))
+    .replace(/<li\b([^>]*)>/gi, patchOpeningTag("li", "margin:1px 0;padding:0;line-height:1.45;"))
+    .replace(/<p\b([^>]*)>/gi, patchOpeningTag("p", "margin:0.22em 0;line-height:inherit;"));
+}
+
 /** Plain-text fallback for an item (email copy / legacy data without bodyHtml). */
 function itemToPlainText(item) {
   if (item.bodyHtml) {
@@ -615,6 +631,7 @@ function CaptainView({ newsletterData }) {
 
   async function handleCopyForEmail() {
     const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
+    const customWithText = customEntries.filter((e) => e.text);
     const plainParts = [];
     const htmlParts = [];
     plainParts.push(config.name || "Zone Newsletter");
@@ -625,26 +642,52 @@ function CaptainView({ newsletterData }) {
     plainParts.push("");
 
     htmlParts.push('<div style="font-family:Merriweather,Georgia,serif;font-size:14px;line-height:1.55;color:#1f2937;">');
-    htmlParts.push(`<p><strong>${escapeHtmlPlain(config.name || "Zone Newsletter")}</strong></p>`);
-    if (config.tagline) htmlParts.push(`<p style="color:#555">${escapeHtmlPlain(config.tagline)}</p>`);
-    if (newsletterData?.date) htmlParts.push(`<p style="color:#555">${escapeHtmlPlain(newsletterData.date)}</p>`);
+    htmlParts.push(
+      `<p style="margin:0 0 6px;"><strong style="font-size:20px;line-height:1.2;">${escapeHtmlPlain(config.name || "Zone Newsletter")}</strong></p>`,
+    );
+    if (config.tagline) {
+      htmlParts.push(`<p style="margin:0 0 10px;color:#555;">${escapeHtmlPlain(config.tagline)}</p>`);
+    }
+    const metaBits = [];
+    if (newsletterData?.date) metaBits.push(escapeHtmlPlain(newsletterData.date));
+    if (config.zone) metaBits.push(escapeHtmlPlain(config.zone));
+    if (config.captainName) metaBits.push(`Captain: ${escapeHtmlPlain(config.captainName)}`);
+    if (metaBits.length) {
+      htmlParts.push(`<p style="margin:0 0 10px;color:#555;font-size:13px;">${metaBits.join(" • ")}</p>`);
+    }
+    htmlParts.push(
+      '<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#666;font-size:12px;line-height:1.45;">Curated from the Altagether Neighborhood Captain Newsletter</p>',
+    );
     htmlParts.push("<hr style=\"border:none;border-top:1px solid #ddd;margin:12px 0;\" />");
+
+    customWithText.forEach((e, i) => {
+      plainParts.push(e.heading || "Update");
+      plainParts.push(e.text);
+      plainParts.push("");
+      if (e.heading) {
+        htmlParts.push(
+          `<h3 style="margin:18px 0 10px;font-size:16px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#bc5838;border-bottom:2px solid #bc5838;padding-bottom:4px;">${escapeHtmlPlain(e.heading)}</h3>`,
+        );
+      }
+      const bodyTop = i === 0 && !e.heading ? "12px" : "0";
+      htmlParts.push(`<p style="white-space:pre-wrap;margin:${bodyTop} 0 16px;">${escapeHtmlPlain(e.text)}</p>`);
+    });
 
     for (const sec of selectedBySection) {
       const col = getSectionColor(sec.heading);
       plainParts.push(sec.heading.toUpperCase());
       plainParts.push("");
       htmlParts.push(
-        `<h3 style="margin:16px 0 8px;font-size:13px;letter-spacing:0.06em;color:${escapeHtmlPlain(col)};border-bottom:2px solid ${escapeHtmlPlain(col)};padding-bottom:4px;">${escapeHtmlPlain(sec.heading)}</h3>`,
+        `<h3 style="margin:18px 0 8px;font-size:17px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:${escapeHtmlPlain(col)};border-bottom:2px solid ${escapeHtmlPlain(col)};padding-bottom:5px;line-height:1.25;">${escapeHtmlPlain(sec.heading)}</h3>`,
       );
       for (const item of sec.items) {
         plainParts.push(itemToPlainText(item));
         plainParts.push("");
-        htmlParts.push('<div style="margin-bottom:14px;padding-left:10px;border-left:3px solid rgba(0,0,0,0.08);">');
+        htmlParts.push('<div style="margin-bottom:12px;padding-left:10px;border-left:3px solid rgba(0,0,0,0.08);">');
         if (item.bodyHtml) {
-          htmlParts.push(item.bodyHtml);
+          htmlParts.push(augmentEmailItemBodyHtml(item.bodyHtml));
         } else {
-          htmlParts.push(`<p>${escapeHtmlPlain(item.text || "")}</p>`);
+          htmlParts.push(`<p style="margin:0.25em 0;">${escapeHtmlPlain(item.text || "")}</p>`);
           if (item.links?.length) {
             for (const l of item.links) {
               if (l.url) {
@@ -658,14 +701,6 @@ function CaptainView({ newsletterData }) {
         htmlParts.push("</div>");
       }
     }
-
-    customEntries.filter((e) => e.text).forEach((e) => {
-      plainParts.push(e.heading || "Update");
-      plainParts.push(e.text);
-      plainParts.push("");
-      if (e.heading) htmlParts.push(`<h3>${escapeHtmlPlain(e.heading)}</h3>`);
-      htmlParts.push(`<p style="white-space:pre-wrap;">${escapeHtmlPlain(e.text)}</p>`);
-    });
 
     htmlParts.push(
       "<p style=\"font-size:11px;color:#888;margin-top:20px;\">Altagether • altagether.org • newsletter@altagether.org</p>",
