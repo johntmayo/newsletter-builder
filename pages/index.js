@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import AdminReviewStructure from "../components/AdminReviewStructure";
 import { repairLegacyAmpDoubling } from "../lib/sanitizeMailerLiteHtml";
 
 // ── Design tokens (CSS vars — see styles/globals.css & altagether-subpage-style.md)
@@ -261,8 +262,9 @@ function Tag({ text, color }) {
 }
 
 // ── Admin View ─────────────────────────────────────────────────────────────────
-function AdminView({ onDataParsed, existingData }) {
+function AdminView({ onDataParsed, existingData, onIssueUpdated }) {
   const [authed, setAuthed] = useState(false);
+  const [adminTab, setAdminTab] = useState("upload");
   const [pw, setPw] = useState("");
   const [pwError, setPwError] = useState("");
   const [file, setFile] = useState(null);
@@ -357,43 +359,114 @@ function AdminView({ onDataParsed, existingData }) {
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: "40px auto", padding: 32 }}>
-      <div style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, padding: 32, boxShadow: V.cardShadow }}>
-        <div style={{ fontSize: 20, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 4 }}>Upload New Newsletter</div>
-        <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. It is parsed and saved so everyone who opens the site gets this edition.</div>
-
-        <div
-          onClick={() => fileRef.current?.click()}
+    <div style={{ margin: "24px auto 40px", padding: "0 16px", maxWidth: adminTab === "review" ? 960 : 640 }}>
+      <div
+        role="tablist"
+        aria-label="Admin tasks"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 0,
+          marginBottom: 20,
+          border: `2px solid ${V.border}`,
+          borderRadius: 8,
+          overflow: "hidden",
+          boxShadow: V.cardShadow,
+        }}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={adminTab === "upload"}
+          onClick={() => setAdminTab("upload")}
           style={{
-            border: `2px dashed ${file ? V.green : V.border}`, borderRadius: 8, padding: "32px 24px",
-            textAlign: "center", cursor: "pointer", background: file ? V.greenTint08 : V.inputBg,
-            transition: "all 0.2s", marginBottom: 20,
+            flex: "1 1 140px",
+            padding: "12px 16px",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: V.fontDisplay,
+            fontWeight: 700,
+            fontSize: 13,
+            letterSpacing: "0.04em",
+            background: adminTab === "upload" ? V.gold : V.card,
+            color: adminTab === "upload" ? V.ink : V.muted,
           }}
         >
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📰</div>
-          {file
-            ? <div style={{ fontWeight: 700, color: V.green, fontFamily: V.fontBody }}>{file.name}</div>
-            : <div style={{ color: V.muted, fontSize: 14 }}>Click to select newsletter HTML (.html)</div>
-          }
-          <input ref={fileRef} type="file" accept=".html,.htm,text/html" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
+          Upload issue
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={adminTab === "review"}
+          onClick={() => setAdminTab("review")}
+          style={{
+            flex: "1 1 140px",
+            padding: "12px 16px",
+            border: "none",
+            borderLeft: `2px solid ${V.border}`,
+            cursor: "pointer",
+            fontFamily: V.fontDisplay,
+            fontWeight: 700,
+            fontSize: 13,
+            letterSpacing: "0.04em",
+            background: adminTab === "review" ? V.gold : V.card,
+            color: adminTab === "review" ? V.ink : V.muted,
+          }}
+        >
+          Review structure
+        </button>
+      </div>
+
+      <div hidden={adminTab !== "upload"}>
+        <div style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, padding: 32, boxShadow: V.cardShadow }}>
+          <div style={{ fontSize: 20, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 4 }}>Upload New Newsletter</div>
+          <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. It is parsed and saved so everyone who opens the site gets this edition.</div>
+
+          <div
+            onClick={() => fileRef.current?.click()}
+            style={{
+              border: `2px dashed ${file ? V.green : V.border}`, borderRadius: 8, padding: "32px 24px",
+              textAlign: "center", cursor: "pointer", background: file ? V.greenTint08 : V.inputBg,
+              transition: "all 0.2s", marginBottom: 20,
+            }}
+          >
+            <div style={{ fontSize: 28, marginBottom: 8 }}>📰</div>
+            {file
+              ? <div style={{ fontWeight: 700, color: V.green, fontFamily: V.fontBody }}>{file.name}</div>
+              : <div style={{ color: V.muted, fontSize: 14 }}>Click to select newsletter HTML (.html)</div>
+            }
+            <input ref={fileRef} type="file" accept=".html,.htm,text/html" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
+          </div>
+
+          <Button onClick={handleUpload} disabled={!file || loading} style={{ width: "100%" }}>
+            {loading ? "Parsing…" : "Parse & Publish Newsletter"}
+          </Button>
+
+          {status && (
+            <div style={{ marginTop: 16, padding: "12px 16px", background: status.startsWith("✓") ? V.greenTint15 : V.border, borderRadius: 8, fontSize: 13, color: status.startsWith("✓") ? V.green : status.startsWith("Error") ? V.clay : V.ink, fontFamily: V.fontBody }}>
+              {status}
+            </div>
+          )}
+
+          {existingData && (
+            <div style={{ marginTop: 24, padding: "12px 16px", background: V.border, borderRadius: 6, fontSize: 12, color: V.muted }}>
+              <strong>Current issue:</strong> {existingData.title} — {existingData.date}<br />
+              Published: {existingData._uploadedAt ? new Date(existingData._uploadedAt).toLocaleDateString() : "Unknown"}
+            </div>
+          )}
         </div>
+      </div>
 
-        <Button onClick={handleUpload} disabled={!file || loading} style={{ width: "100%" }}>
-          {loading ? "Parsing…" : "Parse & Publish Newsletter"}
-        </Button>
-
-        {status && (
-          <div style={{ marginTop: 16, padding: "12px 16px", background: status.startsWith("✓") ? V.greenTint15 : V.border, borderRadius: 8, fontSize: 13, color: status.startsWith("✓") ? V.green : status.startsWith("Error") ? V.clay : V.ink, fontFamily: V.fontBody }}>
-            {status}
-          </div>
-        )}
-
-        {existingData && (
-          <div style={{ marginTop: 24, padding: "12px 16px", background: V.border, borderRadius: 6, fontSize: 12, color: V.muted }}>
-            <strong>Current issue:</strong> {existingData.title} — {existingData.date}<br />
-            Published: {existingData._uploadedAt ? new Date(existingData._uploadedAt).toLocaleDateString() : "Unknown"}
-          </div>
-        )}
+      <div hidden={adminTab !== "review"}>
+        <AdminReviewStructure
+          newsletterData={existingData}
+          password={pw}
+          onIssueUpdated={onIssueUpdated}
+          getSectionColor={getSectionColor}
+          Button={Button}
+          V={V}
+          storageKey={STORAGE_KEY}
+        />
       </div>
     </div>
   );
@@ -1053,7 +1126,18 @@ export default function App() {
 
       <main className="nl-app-main" style={newsletterData ? { paddingTop: "0.75rem" } : undefined}>
         {mode === "admin"
-          ? <AdminView onDataParsed={handleDataParsed} existingData={newsletterData} />
+          ? (
+            <AdminView
+              onDataParsed={handleDataParsed}
+              existingData={newsletterData}
+              onIssueUpdated={(data) => {
+                setNewsletterData(data);
+                try {
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                } catch (_) {}
+              }}
+            />
+          )
           : <CaptainView newsletterData={newsletterData} />
         }
       </main>
