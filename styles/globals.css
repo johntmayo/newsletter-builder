@@ -1,0 +1,177 @@
+/* Altagether subpage tokens — see altagether-subpage-style.md */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-paper: #fdfbf7;
+  --bg-card: #ffffff;
+  --brand-primary-dark: #314059;
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --accent-gold: #f59e0b;
+  --accent-clay: #bc5838;
+  --accent-green: #283618;
+  --border-color: #e5e7eb;
+  --font-chivo: "Chivo", system-ui, sans-serif;
+  --font-merriweather: "Merriweather", Georgia, serif;
+  --nl-card-shadow: 4px 4px 0 var(--border-color);
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-paper);
+  color: var(--text-primary);
+  font-family: var(--font-merriweather);
+  line-height: 1.6;
+}
+
+/* Buttons (Chivo, tactile) */
+.nl-btn {
+  font-family: var(--font-chivo);
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  border-radius: 6px;
+  padding: 0.55rem 1.15rem;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    filter 0.15s ease;
+  border-style: solid;
+  border-width: 2px;
+}
+
+.nl-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nl-btn-primary {
+  background: var(--accent-green);
+  color: #fff;
+  border-color: var(--accent-green);
+}
+
+.nl-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.nl-btn-secondary {
+  background: var(--bg-card);
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.nl-btn-secondary:hover:not(:disabled) {
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.nl-btn-danger {
+  background: var(--accent-clay);
+  color: #fff;
+  border-color: var(--accent-clay);
+}
+
+.nl-btn-danger:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.nl-btn-ghost {
+  background: transparent;
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.nl-btn-ghost:hover:not(:disabled) {
+  background: var(--accent-green);
+  color: #fff;
+}
+
+.nl-app-main {
+  padding: 2rem 1.5rem 4rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.nl-issue-strip-wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.75rem 1.5rem 0;
+  box-sizing: border-box;
+}
+
+.nl-step-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.nl-captain-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 1.25rem;
+  min-height: 600px;
+}
+
+.nl-mode-segmented {
+  display: flex;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.nl-mode-segmented button {
+  font-family: var(--font-chivo);
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  padding: 0.45rem 1.1rem;
+  margin: 0;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.nl-mode-segmented button + button {
+  border-left: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.nl-mode-segmented button.nl-mode-segmented--active {
+  background: var(--accent-gold);
+  color: var(--text-primary);
+}
+
+.nl-mode-segmented button:hover:not(.nl-mode-segmented--active) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 640px) {
+  .nl-app-main {
+    padding: 1rem 1rem 3rem;
+  }
+
+  .nl-issue-strip-wrap {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .nl-captain-grid {
+    grid-template-columns: 1fr;
+  }
+}

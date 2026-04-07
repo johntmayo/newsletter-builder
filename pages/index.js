@@ -1,24 +1,33 @@
 import { useState, useEffect, useRef } from "react";
 
-// ── Palette & constants ────────────────────────────────────────────────────────
+// ── Design tokens (CSS vars — see styles/globals.css & altagether-subpage-style.md)
 const ADMIN_PASSWORD = "altagether2025";
 const STORAGE_KEY = "altagether_newsletter_data";
 
-const C = {
-  cream: "#F5F0E8",
-  paper: "#FDFAF4",
-  ink: "#1A1612",
-  forest: "#2D5016",
-  rust: "#C4541A",
-  gold: "#D4A017",
-  mist: "#E8E2D6",
-  smoke: "#9B9488",
-  white: "#FFFFFF",
+const V = {
+  paper: "var(--bg-paper)",
+  card: "var(--bg-card)",
+  ink: "var(--text-primary)",
+  muted: "var(--text-secondary)",
+  border: "var(--border-color)",
+  navy: "var(--brand-primary-dark)",
+  green: "var(--accent-green)",
+  gold: "var(--accent-gold)",
+  clay: "var(--accent-clay)",
+  white: "#ffffff",
+  cardShadow: "var(--nl-card-shadow)",
+  fontDisplay: 'var(--font-chivo), system-ui, sans-serif',
+  fontBody: 'var(--font-merriweather), Georgia, serif',
+  inputBg: "var(--bg-card)",
+  greenTint08: "rgba(40, 54, 24, 0.08)",
+  greenTint15: "rgba(40, 54, 24, 0.15)",
+  clayTint: "rgba(188, 88, 56, 0.12)",
 };
 
+/** Section rail colors — distinct hues for scanability (not all from core tokens). */
 const SECTION_COLORS = {
-  "Recovery Updates": C.forest,
-  "Upcoming Deadlines": C.rust,
+  "Recovery Updates": "#283618",
+  "Upcoming Deadlines": "#bc5838",
   Events: "#5B4A8A",
   Surveys: "#1A6B8A",
   "Community & Financial Support": "#8A4A1A",
@@ -27,7 +36,7 @@ const SECTION_COLORS = {
   "In-Person Locations & Resources": "#6B1A4A",
   "Additional Community Calendars": "#3D5A6C",
   Links: "#4A5568",
-  Other: C.smoke,
+  Other: "#6b7280",
 };
 
 async function parseNewsletterHtmlUpload(html) {
@@ -67,7 +76,7 @@ function getSectionColor(heading) {
   for (const [key, color] of Object.entries(SECTION_COLORS)) {
     if (heading?.toLowerCase().includes(key.toLowerCase())) return color;
   }
-  return C.smoke;
+  return SECTION_COLORS.Other;
 }
 
 function escapeHtmlPlain(s) {
@@ -109,9 +118,10 @@ function NewsletterItemBody({ item, sectionColor, appendixLinks }) {
       <div
         className="nl-item-body"
         style={{
-          fontSize: 13,
+          fontSize: "0.9rem",
           lineHeight: 1.65,
-          color: C.ink,
+          color: "var(--text-primary)",
+          fontFamily: V.fontBody,
           ["--nl-accent"]: sectionColor,
         }}
         dangerouslySetInnerHTML={{ __html: item.bodyHtml }}
@@ -120,7 +130,7 @@ function NewsletterItemBody({ item, sectionColor, appendixLinks }) {
   }
   return (
     <>
-      <div style={{ fontSize: 13, lineHeight: 1.65 }}>{item.text}</div>
+      <div style={{ fontSize: "0.9rem", lineHeight: 1.65, fontFamily: V.fontBody }}>{item.text}</div>
       {appendixLinks && item.links?.length > 0 && (
         <div style={{ marginTop: 4 }}>
           {item.links.map((l, i) => (
@@ -151,7 +161,11 @@ function injectPrintStyles() {
     .nl-item-body p { margin: 0.35em 0; }
     .nl-item-body p:first-child { margin-top: 0; }
     .nl-item-body p:last-child { margin-bottom: 0; }
-    .nl-item-body a { color: var(--nl-accent, #2d5016); text-decoration: underline; }
+    .nl-item-body {
+      font-family: var(--font-merriweather), Georgia, serif;
+      color: var(--text-primary);
+    }
+    .nl-item-body a { color: var(--nl-accent, var(--accent-green)); text-decoration: underline; font-weight: 700; }
     @media print {
       body * { visibility: hidden; }
       #print-root, #print-root * { visibility: visible; }
@@ -176,38 +190,83 @@ function injectPrintStyles() {
 
 // ── Components ─────────────────────────────────────────────────────────────────
 
-function Logo() {
+/** @param {{ onDark?: boolean }} props — onDark: white wordmark for navy header; else navy text for cards */
+function Logo({ onDark = false }) {
+  const [imgOk, setImgOk] = useState(true);
+
+  if (onDark) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {imgOk ? (
+          <img
+            src="/images/logo_white_transparent.png"
+            alt="Altagether"
+            height={40}
+            style={{ display: "block", width: "auto" }}
+            onError={() => setImgOk(false)}
+          />
+        ) : (
+          <span
+            style={{
+              fontFamily: V.fontDisplay,
+              fontWeight: 800,
+              fontSize: "1.25rem",
+              color: V.white,
+              letterSpacing: "0.06em",
+            }}
+          >
+            ALTAGETHER
+          </span>
+        )}
+        <span
+          style={{
+            fontFamily: V.fontDisplay,
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            color: "rgba(255,255,255,0.82)",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+          }}
+        >
+          Newsletter Builder
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{
-        width: 36, height: 36, background: C.forest, borderRadius: 6,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        flexShrink: 0,
-      }}>
-        <span style={{ color: C.cream, fontSize: 18, fontWeight: 900, fontFamily: "Georgia, serif" }}>A</span>
-      </div>
-      <div>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, letterSpacing: "0.08em", fontFamily: "Georgia, serif" }}>ALTAGETHER</div>
-        <div style={{ fontSize: 10, color: C.smoke, letterSpacing: "0.12em", textTransform: "uppercase" }}>Newsletter Builder</div>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <span
+        style={{
+          fontFamily: V.fontDisplay,
+          fontWeight: 800,
+          fontSize: "1.35rem",
+          color: V.navy,
+          letterSpacing: "0.05em",
+        }}
+      >
+        ALTAGETHER
+      </span>
+      <span
+        style={{
+          fontFamily: V.fontDisplay,
+          fontSize: "0.72rem",
+          fontWeight: 700,
+          color: V.muted,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+        }}
+      >
+        Newsletter Builder
+      </span>
     </div>
   );
 }
 
-function Button({ children, onClick, variant = "primary", disabled, style = {} }) {
-  const base = {
-    padding: "10px 20px", border: "none", borderRadius: 6, cursor: disabled ? "not-allowed" : "pointer",
-    fontFamily: "Georgia, serif", fontWeight: 700, fontSize: 13, letterSpacing: "0.04em",
-    transition: "all 0.15s", opacity: disabled ? 0.5 : 1, ...style,
-  };
-  const variants = {
-    primary: { background: C.forest, color: C.cream },
-    secondary: { background: C.mist, color: C.ink },
-    danger: { background: C.rust, color: C.white },
-    ghost: { background: "transparent", color: C.forest, border: `1px solid ${C.forest}` },
-  };
+function Button({ children, onClick, variant = "primary", disabled, style = {}, className = "" }) {
+  const cls = `nl-btn nl-btn-${variant} ${className}`.trim();
   return (
-    <button onClick={onClick} disabled={disabled} style={{ ...base, ...variants[variant] }}>
+    <button type="button" onClick={onClick} disabled={disabled} className={cls} style={style}>
       {children}
     </button>
   );
@@ -265,16 +324,16 @@ function AdminView({ onDataParsed, existingData }) {
 
   if (!authed) {
     return (
-      <div style={{ maxWidth: 400, margin: "80px auto", padding: 32, background: C.paper, borderRadius: 12, boxShadow: "0 4px 24px rgba(0,0,0,0.08)", border: `1px solid ${C.mist}` }}>
+      <div style={{ maxWidth: 400, margin: "80px auto", padding: 32, background: V.card, borderRadius: 8, boxShadow: V.cardShadow, border: `2px solid ${V.border}` }}>
         <Logo />
-        <div style={{ marginTop: 28, marginBottom: 6, fontSize: 13, color: C.smoke, fontFamily: "Georgia, serif" }}>Admin Password</div>
+        <div style={{ marginTop: 28, marginBottom: 6, fontSize: 13, color: V.muted, fontFamily: V.fontDisplay, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>Admin Password</div>
         <input
           type="password" value={pw} onChange={e => setPw(e.target.value)}
           onKeyDown={e => e.key === "Enter" && handleLogin()}
           placeholder="Enter password…"
-          style={{ width: "100%", padding: "10px 12px", border: `1px solid ${C.mist}`, borderRadius: 6, fontSize: 14, fontFamily: "Georgia, serif", background: C.cream, boxSizing: "border-box" }}
+          style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
         />
-        {pwError && <div style={{ color: C.rust, fontSize: 12, marginTop: 6 }}>{pwError}</div>}
+        {pwError && <div style={{ color: V.clay, fontSize: 12, marginTop: 6 }}>{pwError}</div>}
         <Button onClick={handleLogin} style={{ marginTop: 14, width: "100%" }}>Sign In</Button>
       </div>
     );
@@ -282,22 +341,22 @@ function AdminView({ onDataParsed, existingData }) {
 
   return (
     <div style={{ maxWidth: 640, margin: "40px auto", padding: 32 }}>
-      <div style={{ background: C.paper, border: `1px solid ${C.mist}`, borderRadius: 12, padding: 32, boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
-        <div style={{ fontSize: 20, fontWeight: 800, fontFamily: "Georgia, serif", color: C.ink, marginBottom: 4 }}>Upload New Newsletter</div>
-        <div style={{ fontSize: 13, color: C.smoke, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. Parsing runs locally—no API keys, no cost—and pulls every section, item, and link from the markup.</div>
+      <div style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, padding: 32, boxShadow: V.cardShadow }}>
+        <div style={{ fontSize: 20, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 4 }}>Upload New Newsletter</div>
+        <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Upload the MailerLite HTML export for the latest issue. Parsing runs locally—no API keys, no cost—and pulls every section, item, and link from the markup.</div>
 
         <div
           onClick={() => fileRef.current?.click()}
           style={{
-            border: `2px dashed ${file ? C.forest : C.mist}`, borderRadius: 8, padding: "32px 24px",
-            textAlign: "center", cursor: "pointer", background: file ? C.forest + "08" : C.cream,
+            border: `2px dashed ${file ? V.green : V.border}`, borderRadius: 8, padding: "32px 24px",
+            textAlign: "center", cursor: "pointer", background: file ? V.greenTint08 : V.inputBg,
             transition: "all 0.2s", marginBottom: 20,
           }}
         >
           <div style={{ fontSize: 28, marginBottom: 8 }}>📰</div>
           {file
-            ? <div style={{ fontWeight: 700, color: C.forest, fontFamily: "Georgia, serif" }}>{file.name}</div>
-            : <div style={{ color: C.smoke, fontSize: 14 }}>Click to select newsletter HTML (.html)</div>
+            ? <div style={{ fontWeight: 700, color: V.green, fontFamily: V.fontBody }}>{file.name}</div>
+            : <div style={{ color: V.muted, fontSize: 14 }}>Click to select newsletter HTML (.html)</div>
           }
           <input ref={fileRef} type="file" accept=".html,.htm,text/html" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
         </div>
@@ -307,13 +366,13 @@ function AdminView({ onDataParsed, existingData }) {
         </Button>
 
         {status && (
-          <div style={{ marginTop: 16, padding: "12px 16px", background: status.startsWith("✓") ? C.forest + "15" : C.mist, borderRadius: 6, fontSize: 13, color: status.startsWith("✓") ? C.forest : C.ink, fontFamily: "Georgia, serif" }}>
+          <div style={{ marginTop: 16, padding: "12px 16px", background: status.startsWith("✓") ? V.greenTint15 : V.border, borderRadius: 8, fontSize: 13, color: status.startsWith("✓") ? V.green : status.startsWith("Error") ? V.clay : V.ink, fontFamily: V.fontBody }}>
             {status}
           </div>
         )}
 
         {existingData && (
-          <div style={{ marginTop: 24, padding: "12px 16px", background: C.mist, borderRadius: 6, fontSize: 12, color: C.smoke }}>
+          <div style={{ marginTop: 24, padding: "12px 16px", background: V.border, borderRadius: 6, fontSize: 12, color: V.muted }}>
             <strong>Current issue:</strong> {existingData.title} — {existingData.date}<br />
             Published: {existingData._uploadedAt ? new Date(existingData._uploadedAt).toLocaleDateString() : "Unknown"}
           </div>
@@ -336,15 +395,19 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
       }}
       style={{
         display: "flex", gap: 12, padding: "12px 14px",
-        background: selected ? sectionColor + "10" : C.cream,
-        border: `1px solid ${selected ? sectionColor : C.mist}`,
-        borderRadius: 8, cursor: "pointer", transition: "all 0.15s",
-        marginBottom: 8, alignItems: "flex-start",
+        background: selected ? sectionColor + "10" : V.inputBg,
+        border: `2px solid ${selected ? sectionColor : V.border}`,
+        borderRadius: 8,
+        boxShadow: selected ? "none" : V.cardShadow,
+        cursor: "pointer",
+        transition: "all 0.15s",
+        marginBottom: 8,
+        alignItems: "flex-start",
       }}
     >
       <div style={{
         width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
-        border: `2px solid ${selected ? sectionColor : C.smoke}`,
+        border: `2px solid ${selected ? sectionColor : V.muted}`,
         background: selected ? sectionColor : "transparent",
         display: "flex", alignItems: "center", justifyContent: "center",
         transition: "all 0.15s",
@@ -363,8 +426,8 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
             style={{
               fontSize: 13,
               lineHeight: 1.5,
-              fontFamily: "Georgia, serif",
-              color: C.ink,
+              fontFamily: V.fontBody,
+              color: V.ink,
               maxHeight: 220,
               overflow: "auto",
               ["--nl-accent"]: sectionColor,
@@ -373,7 +436,7 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
           />
         ) : (
           <>
-            <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.5, fontFamily: "Georgia, serif" }}>
+            <div style={{ fontSize: 13, color: V.ink, lineHeight: 1.5, fontFamily: V.fontBody }}>
               {item.text}
             </div>
             {item.links?.length > 0 && (
@@ -388,7 +451,7 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
           </>
         )}
         {item.location && (
-          <div style={{ fontSize: 11, color: C.smoke, marginTop: 3 }}>📍 {item.location}</div>
+          <div style={{ fontSize: 11, color: V.muted, marginTop: 3 }}>📍 {item.location}</div>
         )}
       </div>
     </div>
@@ -410,17 +473,17 @@ function CustomEntryEditor({ entries, onChange }) {
   return (
     <div>
       {entries.map(e => (
-        <div key={e.id} style={{ marginBottom: 12, background: C.cream, border: `1px solid ${C.mist}`, borderRadius: 8, padding: 14 }}>
+        <div key={e.id} style={{ marginBottom: 12, background: V.inputBg, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, padding: 14 }}>
           <input
             value={e.heading} onChange={ev => update(e.id, "heading", ev.target.value)}
             placeholder="Section heading (e.g. Zone 4 Updates)"
-            style={{ width: "100%", padding: "7px 10px", border: `1px solid ${C.mist}`, borderRadius: 5, fontSize: 13, fontFamily: "Georgia, serif", marginBottom: 8, boxSizing: "border-box", background: C.paper }}
+            style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, marginBottom: 8, boxSizing: "border-box", background: V.card }}
           />
           <textarea
             value={e.text} onChange={ev => update(e.id, "text", ev.target.value)}
             placeholder="Write your zone-specific update here…"
             rows={4}
-            style={{ width: "100%", padding: "7px 10px", border: `1px solid ${C.mist}`, borderRadius: 5, fontSize: 13, fontFamily: "Georgia, serif", resize: "vertical", boxSizing: "border-box", background: C.paper, lineHeight: 1.6 }}
+            style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, resize: "vertical", boxSizing: "border-box", background: V.card, lineHeight: 1.6 }}
           />
           <div style={{ textAlign: "right", marginTop: 6 }}>
             <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "5px 12px", fontSize: 11 }}>Remove</Button>
@@ -442,13 +505,13 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
   const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
 
   return (
-    <div style={{ fontFamily: "Georgia, serif", color: C.ink, background: C.white, maxWidth: 720, margin: "0 auto" }}>
+    <div style={{ fontFamily: V.fontBody, color: V.ink, background: V.card, maxWidth: 720, margin: "0 auto" }}>
       {/* Header */}
       {headerImage && (
         <img src={headerImage} alt="Header" style={{ width: "100%", maxHeight: 200, objectFit: "cover", display: "block" }} />
       )}
-      <div style={{ background: C.forest, padding: "24px 32px", color: C.cream }}>
-        <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.03em" }}>{name || "Zone Newsletter"}</div>
+      <div style={{ background: V.navy, padding: "24px 32px", color: V.white }}>
+        <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.03em", fontFamily: V.fontDisplay }}>{name || "Zone Newsletter"}</div>
         {tagline && <div style={{ fontSize: 14, opacity: 0.8, marginTop: 4 }}>{tagline}</div>}
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
           {date && `${date} • `}
@@ -465,7 +528,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         {customEntries.filter(e => e.text).map(e => (
           <div key={e.id} style={{ marginTop: 28 }}>
             {e.heading && (
-              <div style={{ fontSize: 17, fontWeight: 800, color: C.rust, borderBottom: `2px solid ${C.rust}`, paddingBottom: 6, marginBottom: 14, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+              <div style={{ fontSize: 17, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, borderBottom: `2px solid ${V.clay}`, paddingBottom: 6, marginBottom: 14, letterSpacing: "0.04em", textTransform: "uppercase" }}>
                 {e.heading}
               </div>
             )}
@@ -476,7 +539,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         {/* Selected items from newsletter */}
         {selectedBySection.map(sec => (
           <div key={sec.id} style={{ marginTop: 28 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: getSectionColor(sec.heading), borderBottom: `2px solid ${getSectionColor(sec.heading)}`, paddingBottom: 6, marginBottom: 14, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            <div style={{ fontSize: 15, fontWeight: 800, fontFamily: V.fontDisplay, color: getSectionColor(sec.heading), borderBottom: `2px solid ${getSectionColor(sec.heading)}`, paddingBottom: 6, marginBottom: 14, letterSpacing: "0.04em", textTransform: "uppercase" }}>
               {sec.heading}
             </div>
             {sec.items.map(item => (
@@ -497,12 +560,12 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         ))}
 
         {selectedBySection.length === 0 && customEntries.filter(e => e.text).length === 0 && (
-          <div style={{ marginTop: 40, textAlign: "center", color: C.smoke, fontSize: 14 }}>
+          <div style={{ marginTop: 40, textAlign: "center", color: V.muted, fontSize: 14 }}>
             No content selected yet.
           </div>
         )}
 
-        <div style={{ marginTop: 36, paddingTop: 16, borderTop: `1px solid ${C.mist}`, fontSize: 11, color: C.smoke, textAlign: "center" }}>
+        <div style={{ marginTop: 36, paddingTop: 16, borderTop: `1px solid ${V.border}`, fontSize: 11, color: V.muted, textAlign: "center" }}>
           Altagether • altagether.org • newsletter@altagether.org
         </div>
       </div>
@@ -561,7 +624,7 @@ function CaptainView({ newsletterData }) {
     if (config.captainName) plainParts.push(`Captain: ${config.captainName}`);
     plainParts.push("");
 
-    htmlParts.push('<div style="font-family:Georgia,serif;font-size:14px;line-height:1.55;color:#1a1612;">');
+    htmlParts.push('<div style="font-family:Merriweather,Georgia,serif;font-size:14px;line-height:1.55;color:#1f2937;">');
     htmlParts.push(`<p><strong>${escapeHtmlPlain(config.name || "Zone Newsletter")}</strong></p>`);
     if (config.tagline) htmlParts.push(`<p style="color:#555">${escapeHtmlPlain(config.tagline)}</p>`);
     if (newsletterData?.date) htmlParts.push(`<p style="color:#555">${escapeHtmlPlain(newsletterData.date)}</p>`);
@@ -641,8 +704,8 @@ function CaptainView({ newsletterData }) {
     return (
       <div style={{ maxWidth: 500, margin: "80px auto", padding: 32, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>📭</div>
-        <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "Georgia, serif", color: C.ink, marginBottom: 8 }}>No Newsletter Yet</div>
-        <div style={{ fontSize: 14, color: C.smoke }}>
+        <div style={{ fontSize: 18, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 8 }}>No Newsletter Yet</div>
+        <div style={{ fontSize: 14, color: V.muted }}>
           The admin team hasn't published a newsletter issue yet. Check back soon, or contact newsletter@altagether.org.
         </div>
       </div>
@@ -654,21 +717,21 @@ function CaptainView({ newsletterData }) {
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
       {/* Steps */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: `2px solid ${C.mist}` }}>
+      <div style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: `2px solid ${V.border}` }}>
         {["Configure", "Select Content", "Preview & Print"].map((label, i) => (
           <div
             key={i}
             onClick={() => i < step || (i === 1 && step >= 0) || (i === 2 && step >= 1) ? setStep(i) : null}
             style={{
               padding: "12px 24px", fontSize: 13, fontWeight: i === step ? 800 : 500,
-              color: i === step ? C.forest : C.smoke, borderBottom: i === step ? `3px solid ${C.forest}` : "3px solid transparent",
-              cursor: "pointer", fontFamily: "Georgia, serif", letterSpacing: "0.03em",
+              color: i === step ? V.ink : V.muted, borderBottom: i === step ? `3px solid ${V.gold}` : "3px solid transparent",
+              cursor: "pointer", fontFamily: V.fontDisplay, letterSpacing: "0.03em",
               marginBottom: -2, transition: "all 0.15s",
             }}
           >
             <span style={{ opacity: 0.5, marginRight: 6 }}>{i + 1}.</span>{label}
             {i === 1 && totalSelected > 0 && (
-              <span style={{ marginLeft: 8, background: C.forest, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>{totalSelected}</span>
+              <span style={{ marginLeft: 8, background: V.green, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>{totalSelected}</span>
             )}
           </div>
         ))}
@@ -677,8 +740,8 @@ function CaptainView({ newsletterData }) {
       {/* Step 0: Configure */}
       {step === 0 && (
         <div style={{ maxWidth: 560, margin: "0 auto" }}>
-          <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "Georgia, serif", color: C.ink, marginBottom: 4 }}>Configure Your Newsletter</div>
-          <div style={{ fontSize: 13, color: C.smoke, marginBottom: 24 }}>Set up the basics for your zone's version of the newsletter.</div>
+          <div style={{ fontSize: 18, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 4 }}>Configure Your Newsletter</div>
+          <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Set up the basics for your zone's version of the newsletter.</div>
 
           {[
             { field: "name", label: "Newsletter Name", placeholder: "e.g. Zone 4 Neighbor Update" },
@@ -687,27 +750,27 @@ function CaptainView({ newsletterData }) {
             { field: "zone", label: "Zone / Neighborhood", placeholder: "e.g. Zone 4 — Loma Alta" },
           ].map(({ field, label, placeholder }) => (
             <div key={field} style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
               <input
                 value={config[field]} onChange={e => updateConfig(field, e.target.value)}
                 placeholder={placeholder}
-                style={{ width: "100%", padding: "10px 12px", border: `1px solid ${C.mist}`, borderRadius: 6, fontSize: 14, fontFamily: "Georgia, serif", background: C.cream, boxSizing: "border-box" }}
+                style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
               />
             </div>
           ))}
 
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>Header Image (optional)</label>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>Header Image (optional)</label>
             <div
               onClick={() => headerRef.current?.click()}
               style={{
-                border: `2px dashed ${config.headerImage ? C.forest : C.mist}`, borderRadius: 8, padding: "20px",
-                textAlign: "center", cursor: "pointer", background: config.headerImage ? C.forest + "08" : C.cream,
+                border: `2px dashed ${config.headerImage ? V.green : V.border}`, borderRadius: 8, padding: "20px",
+                textAlign: "center", cursor: "pointer", background: config.headerImage ? V.greenTint08 : V.inputBg,
               }}
             >
               {config.headerImage
                 ? <img src={config.headerImage} alt="Header" style={{ maxHeight: 80, maxWidth: "100%", borderRadius: 4 }} />
-                : <div style={{ color: C.smoke, fontSize: 13 }}>Click to upload header image</div>
+                : <div style={{ color: V.muted, fontSize: 13 }}>Click to upload header image</div>
               }
               <input ref={headerRef} type="file" accept="image/*" style={{ display: "none" }}
                 onChange={async e => {
@@ -726,10 +789,10 @@ function CaptainView({ newsletterData }) {
 
       {/* Step 1: Select */}
       {step === 1 && (
-        <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 20, minHeight: 600 }}>
+        <div className="nl-captain-grid">
           {/* Section nav */}
-          <div style={{ background: C.paper, border: `1px solid ${C.mist}`, borderRadius: 10, overflow: "hidden", alignSelf: "start", position: "sticky", top: 20 }}>
-            <div style={{ padding: "12px 16px", background: C.mist, fontSize: 11, fontWeight: 800, color: C.smoke, letterSpacing: "0.1em", textTransform: "uppercase" }}>Sections</div>
+          <div style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, overflow: "hidden", alignSelf: "start", position: "sticky", top: 20 }}>
+            <div style={{ padding: "12px 16px", background: V.border, fontSize: 11, fontWeight: 800, fontFamily: V.fontDisplay, color: V.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Sections</div>
             {sections.map(sec => {
               const color = getSectionColor(sec.heading);
               const count = sec.items.filter(i => selectedIds.has(i.id)).length;
@@ -738,11 +801,11 @@ function CaptainView({ newsletterData }) {
                   key={sec.id}
                   onClick={() => setActiveSection(sec.id)}
                   style={{
-                    padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif",
+                    padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
                     background: activeSection === sec.id ? color + "15" : "transparent",
                     borderLeft: `3px solid ${activeSection === sec.id ? color : "transparent"}`,
                     transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "space-between",
-                    color: activeSection === sec.id ? color : C.ink,
+                    color: activeSection === sec.id ? color : V.ink,
                   }}
                 >
                   <span style={{ fontWeight: activeSection === sec.id ? 700 : 400 }}>{sec.heading}</span>
@@ -755,11 +818,11 @@ function CaptainView({ newsletterData }) {
             <div
               onClick={() => setActiveSection("custom")}
               style={{
-                padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif",
-                background: activeSection === "custom" ? C.rust + "15" : "transparent",
-                borderLeft: `3px solid ${activeSection === "custom" ? C.rust : "transparent"}`,
-                color: activeSection === "custom" ? C.rust : C.ink, fontWeight: activeSection === "custom" ? 700 : 400,
-                borderTop: `1px solid ${C.mist}`, marginTop: 4,
+                padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
+                background: activeSection === "custom" ? V.clayTint : "transparent",
+                borderLeft: `3px solid ${activeSection === "custom" ? V.clay : "transparent"}`,
+                color: activeSection === "custom" ? V.clay : V.ink, fontWeight: activeSection === "custom" ? 700 : 400,
+                borderTop: `1px solid ${V.border}`, marginTop: 4,
               }}
             >
               + Zone Updates
@@ -770,8 +833,8 @@ function CaptainView({ newsletterData }) {
           <div>
             {activeSection === "custom" ? (
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "Georgia, serif", color: C.rust, marginBottom: 4 }}>Zone-Specific Updates</div>
-                <div style={{ fontSize: 13, color: C.smoke, marginBottom: 16 }}>Add your own neighborhood news, announcements, or updates.</div>
+                <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, marginBottom: 4 }}>Zone-Specific Updates</div>
+                <div style={{ fontSize: 13, color: V.muted, marginBottom: 16 }}>Add your own neighborhood news, announcements, or updates.</div>
                 <CustomEntryEditor entries={customEntries} onChange={setCustomEntries} />
               </div>
             ) : (() => {
@@ -783,8 +846,8 @@ function CaptainView({ newsletterData }) {
                 <div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                     <div>
-                      <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "Georgia, serif", color }}>{sec.heading}</div>
-                      <div style={{ fontSize: 12, color: C.smoke }}>{sec.items.length} items • {sec.items.filter(i => selectedIds.has(i.id)).length} selected</div>
+                      <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color }}>{sec.heading}</div>
+                      <div style={{ fontSize: 12, color: V.muted }}>{sec.items.length} items • {sec.items.filter(i => selectedIds.has(i.id)).length} selected</div>
                     </div>
                     <Button variant="ghost" onClick={() => toggleSection(sec)} style={{ fontSize: 11, padding: "6px 14px", borderColor: color, color }}>
                       {allSelected ? "Deselect All" : "Select All"}
@@ -797,7 +860,7 @@ function CaptainView({ newsletterData }) {
               );
             })()}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24, paddingTop: 16, borderTop: `1px solid ${C.mist}` }}>
+            <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginTop: 24, paddingTop: 16, borderTop: `1px solid ${V.border}` }}>
               <Button variant="secondary" onClick={() => setStep(0)}>← Back</Button>
               <Button onClick={() => setStep(2)}>Preview & Print →</Button>
             </div>
@@ -808,27 +871,38 @@ function CaptainView({ newsletterData }) {
       {/* Step 2: Preview */}
       {step === 2 && (
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800, fontFamily: "Georgia, serif", color: C.ink }}>Preview & Print</div>
-              <div style={{ fontSize: 12, color: C.smoke }}>{totalSelected} items selected</div>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-              <Button variant="secondary" onClick={() => setStep(1)}>← Edit</Button>
-              <Button variant="secondary" onClick={handleCopyForEmail}>📋 Copy for email</Button>
-              <Button onClick={handlePrint}>🖨 Print / Save PDF</Button>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink }}>Preview & Print</div>
+                <div style={{ fontSize: 12, color: V.muted }}>{totalSelected} items selected</div>
+              </div>
+              <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginLeft: "auto" }}>
+                <Button variant="secondary" onClick={() => setStep(1)}>← Edit</Button>
+                <Button variant="secondary" onClick={handleCopyForEmail}>📋 Copy for email</Button>
+                <Button onClick={handlePrint}>🖨 Print / Save PDF</Button>
+              </div>
             </div>
             {copyStatus && (
-              <div style={{ marginTop: 10, fontSize: 12, color: C.forest, fontFamily: "Georgia, serif" }}>{copyStatus}</div>
+              <div style={{ marginTop: 10, fontSize: 12, color: V.green, fontFamily: V.fontBody }}>{copyStatus}</div>
             )}
           </div>
 
-          <div style={{ border: `1px solid ${C.mist}`, borderRadius: 10, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}>
-            <div id="print-root" ref={printRef}>
-              <NewsletterPreview config={config} newsletterData={newsletterData} selectedIds={selectedIds} customEntries={customEntries} />
-            </div>
+          <div
+            id="print-root"
+            ref={printRef}
+            style={{
+              border: `2px solid ${V.border}`,
+              borderRadius: 8,
+              boxShadow: V.cardShadow,
+              overflow: "hidden",
+              maxWidth: 720,
+              margin: "0 auto",
+            }}
+          >
+            <NewsletterPreview config={config} newsletterData={newsletterData} selectedIds={selectedIds} customEntries={customEntries} />
           </div>
-          <div style={{ textAlign: "center", marginTop: 12, fontSize: 12, color: C.smoke }}>
+          <div style={{ textAlign: "center", marginTop: 12, fontSize: 12, color: V.muted }}>
             Use your browser's Print dialog (Ctrl+P / Cmd+P) and choose "Save as PDF" for a PDF file.
           </div>
         </div>
@@ -856,45 +930,76 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.cream, fontFamily: "system-ui, sans-serif" }}>
-      {/* Top nav */}
-      <div style={{ background: C.paper, borderBottom: `1px solid ${C.mist}`, padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60, position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}>
-        <Logo />
-        <div style={{ display: "flex", gap: 6 }}>
+    <div style={{ minHeight: "100vh", background: V.paper, fontFamily: V.fontBody }}>
+      <header
+        style={{
+          background: V.navy,
+          color: V.white,
+          borderBottom: "3px solid var(--text-primary)",
+          padding: "1rem 1.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+          flexWrap: "wrap",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+        }}
+      >
+        <Logo onDark />
+        <div className="nl-mode-segmented" role="group" aria-label="App mode">
           <button
+            type="button"
+            className={mode === "captain" ? "nl-mode-segmented--active" : ""}
             onClick={() => setMode("captain")}
-            style={{ padding: "6px 16px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "Georgia, serif", background: mode === "captain" ? C.forest : "transparent", color: mode === "captain" ? C.cream : C.smoke, letterSpacing: "0.04em" }}
           >
             Build Newsletter
           </button>
           <button
+            type="button"
+            className={mode === "admin" ? "nl-mode-segmented--active" : ""}
             onClick={() => setMode("admin")}
-            style={{ padding: "6px 16px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "Georgia, serif", background: mode === "admin" ? C.forest : "transparent", color: mode === "admin" ? C.cream : C.smoke, letterSpacing: "0.04em" }}
           >
             Admin
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Issue badge */}
       {newsletterData && (
-        <div style={{ background: C.forest, padding: "8px 32px", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, color: C.cream + "aa", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Current Issue:</span>
-          <span style={{ fontSize: 12, color: C.cream, fontFamily: "Georgia, serif", fontWeight: 700 }}>{newsletterData.title}</span>
-          <span style={{ fontSize: 11, color: C.cream + "80" }}>• {newsletterData.date}</span>
-          {newsletterData.nextIssue && (
-            <span style={{ fontSize: 11, color: C.gold }}>• Next: {newsletterData.nextIssue}</span>
-          )}
+        <div className="nl-issue-strip-wrap">
+          <div
+            style={{
+              background: V.card,
+              border: `2px solid ${V.border}`,
+              borderRadius: 8,
+              boxShadow: V.cardShadow,
+              borderLeft: `4px solid ${V.gold}`,
+              padding: "10px 16px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ fontSize: 11, color: V.muted, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, fontFamily: V.fontDisplay }}>
+              Current Issue
+            </span>
+            <span style={{ fontSize: 13, color: V.ink, fontFamily: V.fontBody, fontWeight: 700 }}>{newsletterData.title}</span>
+            <span style={{ fontSize: 12, color: V.muted }}>• {newsletterData.date}</span>
+            {newsletterData.nextIssue && (
+              <span style={{ fontSize: 12, color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>• Next: {newsletterData.nextIssue}</span>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Main */}
-      <div style={{ padding: "32px 32px 64px" }}>
+      <main className="nl-app-main" style={newsletterData ? { paddingTop: "0.75rem" } : undefined}>
         {mode === "admin"
           ? <AdminView onDataParsed={handleDataParsed} existingData={newsletterData} />
           : <CaptainView newsletterData={newsletterData} />
         }
-      </div>
+      </main>
     </div>
   );
 }
