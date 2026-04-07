@@ -207,22 +207,19 @@ function injectPrintStyles() {
 
 // ── Components ─────────────────────────────────────────────────────────────────
 
-/** Shared title styles: "ALTAGETHER" and "Newsletter Builder" use the same font treatment. */
-function logoTitleStyle(onDark) {
-  return {
-    fontFamily: V.fontDisplay,
-    fontWeight: 800,
-    fontSize: "1.05rem",
-    letterSpacing: "0.07em",
-    lineHeight: 1.2,
-    color: onDark ? V.white : V.navy,
-  };
-}
+const LOGO_IMG_HEIGHT = Math.round(40 * 1.2);
 
 /** @param {{ onDark?: boolean }} props — onDark: white logo + text on navy header; else logo (darkened) + navy text on light surfaces */
 function Logo({ onDark = false }) {
   const [imgOk, setImgOk] = useState(true);
-  const title = logoTitleStyle(onDark);
+  const titleStyle = {
+    fontFamily: V.fontDisplay,
+    fontWeight: 700,
+    fontSize: 24,
+    lineHeight: 1.2,
+    letterSpacing: "0.01em",
+    color: onDark ? V.white : V.navy,
+  };
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -230,11 +227,11 @@ function Logo({ onDark = false }) {
         <img
           src="/images/logo_white_transparent.png"
           alt=""
-          height={40}
+          height={LOGO_IMG_HEIGHT}
           style={{
             display: "block",
             width: "auto",
-            height: 40,
+            height: LOGO_IMG_HEIGHT,
             flexShrink: 0,
             objectFit: "contain",
             ...(onDark
@@ -247,18 +244,7 @@ function Logo({ onDark = false }) {
           onError={() => setImgOk(false)}
         />
       ) : null}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.45rem",
-          flexWrap: "wrap",
-          minWidth: 0,
-        }}
-      >
-        <span style={title}>ALTAGETHER</span>
-        <span style={title}>Newsletter Builder</span>
-      </div>
+      <span style={titleStyle}>Newsletter builder</span>
     </div>
   );
 }
