@@ -192,13 +192,6 @@ function injectPrintStyles() {
         width: 100%;
         background: #fff;
       }
-      #print-root .nl-item-body a[href^="http"]::after,
-      #print-root .nl-item-body a[href^="https"]::after {
-        content: " (" attr(href) ")";
-        font-size: 9px;
-        color: #444;
-        word-break: break-all;
-      }
     }
   `;
   document.head.appendChild(style);
