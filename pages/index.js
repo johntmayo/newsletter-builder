@@ -120,13 +120,27 @@ function itemToPlainText(item) {
   return t.trim();
 }
 
+function captainVisibleItems(items) {
+  return (items || []).filter((it) => !it._adminHidden);
+}
+
 function buildSelectedBySection(newsletterData, selectedIds) {
   return (newsletterData?.sections || [])
     .map((sec) => ({
       ...sec,
-      items: sec.items.filter((it) => selectedIds.has(it.id)),
+      items: sec.items.filter((it) => selectedIds.has(it.id) && !it._adminHidden),
     }))
     .filter((sec) => sec.items.length > 0);
+}
+
+function countCaptainVisibleSelected(newsletterData, selectedIds) {
+  let n = 0;
+  for (const sec of newsletterData?.sections || []) {
+    for (const it of sec.items || []) {
+      if (!it._adminHidden && selectedIds.has(it.id)) n += 1;
+    }
+  }
+  return n;
 }
 
 function NewsletterItemBody({ item, sectionColor, appendixLinks }) {
@@ -689,8 +703,8 @@ function CaptainView({ newsletterData }) {
   }
 
   function toggleSection(sec) {
-    const ids = sec.items.map(i => i.id);
-    const allSelected = ids.every(id => selectedIds.has(id));
+    const ids = captainVisibleItems(sec.items).map((i) => i.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selectedIds.has(id));
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (allSelected) ids.forEach(id => next.delete(id));
@@ -807,7 +821,8 @@ function CaptainView({ newsletterData }) {
     setConfig(prev => ({ ...prev, [field]: val }));
   }
 
-  const totalSelected = selectedIds.size + customEntries.filter(e => e.text).length;
+  const visibleSelectedCount = countCaptainVisibleSelected(newsletterData, selectedIds);
+  const totalSelected = visibleSelectedCount + customEntries.filter(e => e.text).length;
 
   if (!newsletterData) {
     return (
@@ -904,7 +919,7 @@ function CaptainView({ newsletterData }) {
             <div style={{ padding: "12px 16px", background: V.border, fontSize: 11, fontWeight: 800, fontFamily: V.fontDisplay, color: V.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Sections</div>
             {sections.map(sec => {
               const color = getSectionColor(sec.heading);
-              const count = sec.items.filter(i => selectedIds.has(i.id)).length;
+              const count = captainVisibleItems(sec.items).filter((i) => selectedIds.has(i.id)).length;
               return (
                 <div
                   key={sec.id}
@@ -950,19 +965,20 @@ function CaptainView({ newsletterData }) {
               const sec = sections.find(s => s.id === activeSection);
               if (!sec) return null;
               const color = getSectionColor(sec.heading);
-              const allSelected = sec.items.every(i => selectedIds.has(i.id));
+              const vis = captainVisibleItems(sec.items);
+              const allSelected = vis.length > 0 && vis.every((i) => selectedIds.has(i.id));
               return (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                     <div>
                       <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color }}>{sec.heading}</div>
-                      <div style={{ fontSize: 12, color: V.muted }}>{sec.items.length} items • {sec.items.filter(i => selectedIds.has(i.id)).length} selected</div>
+                      <div style={{ fontSize: 12, color: V.muted }}>{vis.length} items • {vis.filter((i) => selectedIds.has(i.id)).length} selected</div>
                     </div>
                     <Button variant="ghost" onClick={() => toggleSection(sec)} style={{ fontSize: 11, padding: "6px 14px", borderColor: color, color }}>
                       {allSelected ? "Deselect All" : "Select All"}
                     </Button>
                   </div>
-                  {sec.items.map(item => (
+                  {vis.map(item => (
                     <ItemCard key={item.id} item={item} selected={selectedIds.has(item.id)} onToggle={() => toggleItem(item.id)} sectionColor={color} />
                   ))}
                 </div>

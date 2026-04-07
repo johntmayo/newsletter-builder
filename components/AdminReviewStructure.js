@@ -6,13 +6,8 @@ import {
   mergeItemWithPrevious,
   splitItemInSection,
   splitPointCount,
+  toggleItemHidden,
 } from "../lib/issueStructure";
-
-function previewSnippet(text, max = 140) {
-  const t = (text || "").replace(/\s+/g, " ").trim();
-  if (t.length <= max) return t || "(empty text)";
-  return `${t.slice(0, max)}…`;
-}
 
 /**
  * @param {{
@@ -37,6 +32,12 @@ export default function AdminReviewStructure({
   const [draft, setDraft] = useState(null);
   const [saveStatus, setSaveStatus] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showDebugIds, setShowDebugIds] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setShowDebugIds(new URLSearchParams(window.location.search).get("debug") === "1");
+  }, []);
 
   useEffect(() => {
     if (newsletterData) {
@@ -139,18 +140,18 @@ export default function AdminReviewStructure({
       {draft.sections.map((section, sIdx) => {
         const sectionColor = getSectionColor(section.heading);
         return (
-          <section key={section.id || sIdx} style={{ marginBottom: 28 }}>
+          <section key={section.id || sIdx} style={{ marginBottom: 32 }}>
             <div
               style={{
                 fontFamily: V.fontDisplay,
                 fontWeight: 800,
-                fontSize: 15,
+                fontSize: 20,
                 color: sectionColor,
-                letterSpacing: "0.04em",
+                letterSpacing: "0.03em",
                 textTransform: "uppercase",
-                marginBottom: 12,
-                paddingBottom: 6,
-                borderBottom: `2px solid ${sectionColor}33`,
+                marginBottom: 14,
+                paddingBottom: 8,
+                borderBottom: `3px solid ${sectionColor}44`,
               }}
             >
               {section.heading}
@@ -161,18 +162,20 @@ export default function AdminReviewStructure({
                 const blocks = getBodyHtmlBlocks(item.bodyHtml);
                 const splits = splitPointCount(item.bodyHtml);
                 const canSplit = splits > 0;
+                const hidden = Boolean(item._adminHidden);
                 return (
                   <div
                     key={item.id || `${sIdx}-${iIdx}`}
                     style={{
-                      border: `2px solid ${V.border}`,
+                      border: `2px solid ${hidden ? `${V.muted}66` : V.border}`,
                       borderRadius: 8,
-                      background: V.inputBg,
-                      boxShadow: V.cardShadow,
+                      background: hidden ? "rgba(148, 163, 184, 0.12)" : V.inputBg,
+                      boxShadow: hidden ? "none" : V.cardShadow,
                       overflow: "hidden",
+                      opacity: hidden ? 0.72 : 1,
                     }}
                   >
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${V.border}`, background: V.card }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "10px 12px", borderBottom: `1px solid ${V.border}`, background: hidden ? "rgba(148, 163, 184, 0.08)" : V.card }}>
                       <Button
                         type="button"
                         variant="secondary"
@@ -191,6 +194,25 @@ export default function AdminReviewStructure({
                       >
                         Merge with next
                       </Button>
+                      {hidden ? (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={() => applyDraft(toggleItemHidden(draft, sIdx, iIdx))}
+                          style={{ fontSize: 11, padding: "6px 10px" }}
+                        >
+                          Restore card
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => applyDraft(toggleItemHidden(draft, sIdx, iIdx))}
+                          style={{ fontSize: 11, padding: "6px 10px", borderColor: V.muted, color: V.muted }}
+                        >
+                          Hide card
+                        </Button>
+                      )}
                       <div style={{ flex: "1 1 120px" }} />
                       {canSplit ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: V.muted, fontFamily: V.fontBody }}>
@@ -228,16 +250,15 @@ export default function AdminReviewStructure({
                       )}
                     </div>
                     <div style={{ padding: "12px 14px" }}>
-                      <div style={{ fontSize: 11, color: V.muted, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
-                        Preview (read-only)
+                      <div style={{ fontSize: 12, color: V.muted, fontFamily: V.fontBody, marginBottom: 10, lineHeight: 1.5 }}>
+                        <strong style={{ color: V.ink }}>Blocks:</strong> {blocks.length}
+                        {showDebugIds ? (
+                          <>
+                            {" "}
+                            · <code style={{ fontSize: 11, color: V.muted }}>{item.id}</code>
+                          </>
+                        ) : null}
                       </div>
-                      <div style={{ fontSize: 12, color: V.ink, fontFamily: V.fontBody, marginBottom: 8, lineHeight: 1.5 }}>
-                        <strong>ID:</strong>{" "}
-                        <code style={{ fontSize: 11 }}>{item.id}</code>
-                        {" · "}
-                        <strong>Blocks:</strong> {blocks.length}
-                      </div>
-                      <div style={{ fontSize: 13, color: V.muted, fontFamily: V.fontBody, marginBottom: 10 }}>{previewSnippet(item.text)}</div>
                       {item.bodyHtml ? (
                         <div
                           className="nl-item-body nl-review-body"
