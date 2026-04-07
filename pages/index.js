@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { repairLegacyAmpDoubling } from "../lib/sanitizeMailerLiteHtml";
 
 // ── Design tokens (CSS vars — see styles/globals.css & altagether-subpage-style.md)
 const ADMIN_PASSWORD = "altagether2025";
@@ -105,7 +106,7 @@ function augmentEmailItemBodyHtml(fragment) {
 /** Plain-text fallback for an item (email copy / legacy data without bodyHtml). */
 function itemToPlainText(item) {
   if (item.bodyHtml) {
-    let t = item.bodyHtml.replace(/<\/(p|div|h[1-6]|li)>/gi, "\n");
+    let t = repairLegacyAmpDoubling(item.bodyHtml).replace(/<\/(p|div|h[1-6]|li)>/gi, "\n");
     t = t.replace(/<br\s*\/?>/gi, "\n");
     t = t.replace(/<li[^>]*>/gi, "\n• ");
     t = t.replace(/<[^>]+>/g, "");
@@ -140,7 +141,7 @@ function NewsletterItemBody({ item, sectionColor, appendixLinks }) {
           fontFamily: V.fontBody,
           ["--nl-accent"]: sectionColor,
         }}
-        dangerouslySetInnerHTML={{ __html: item.bodyHtml }}
+        dangerouslySetInnerHTML={{ __html: repairLegacyAmpDoubling(item.bodyHtml) }}
       />
     );
   }
@@ -206,75 +207,58 @@ function injectPrintStyles() {
 
 // ── Components ─────────────────────────────────────────────────────────────────
 
-/** @param {{ onDark?: boolean }} props — onDark: white wordmark for navy header; else navy text for cards */
+/** Shared title styles: "ALTAGETHER" and "Newsletter Builder" use the same font treatment. */
+function logoTitleStyle(onDark) {
+  return {
+    fontFamily: V.fontDisplay,
+    fontWeight: 800,
+    fontSize: "1.05rem",
+    letterSpacing: "0.07em",
+    lineHeight: 1.2,
+    color: onDark ? V.white : V.navy,
+  };
+}
+
+/** @param {{ onDark?: boolean }} props — onDark: white logo + text on navy header; else logo (darkened) + navy text on light surfaces */
 function Logo({ onDark = false }) {
   const [imgOk, setImgOk] = useState(true);
-
-  if (onDark) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {imgOk ? (
-          <img
-            src="/images/logo_white_transparent.png"
-            alt="Altagether"
-            height={40}
-            style={{ display: "block", width: "auto" }}
-            onError={() => setImgOk(false)}
-          />
-        ) : (
-          <span
-            style={{
-              fontFamily: V.fontDisplay,
-              fontWeight: 800,
-              fontSize: "1.25rem",
-              color: V.white,
-              letterSpacing: "0.06em",
-            }}
-          >
-            ALTAGETHER
-          </span>
-        )}
-        <span
-          style={{
-            fontFamily: V.fontDisplay,
-            fontSize: "0.72rem",
-            fontWeight: 700,
-            color: "rgba(255,255,255,0.82)",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}
-        >
-          Newsletter Builder
-        </span>
-      </div>
-    );
-  }
+  const title = logoTitleStyle(onDark);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span
+    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+      {imgOk ? (
+        <img
+          src="/images/logo_white_transparent.png"
+          alt=""
+          height={40}
+          style={{
+            display: "block",
+            width: "auto",
+            height: 40,
+            flexShrink: 0,
+            objectFit: "contain",
+            ...(onDark
+              ? {}
+              : {
+                  filter: "brightness(0) saturate(100%)",
+                  opacity: 0.88,
+                }),
+          }}
+          onError={() => setImgOk(false)}
+        />
+      ) : null}
+      <div
         style={{
-          fontFamily: V.fontDisplay,
-          fontWeight: 800,
-          fontSize: "1.35rem",
-          color: V.navy,
-          letterSpacing: "0.05em",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.45rem",
+          flexWrap: "wrap",
+          minWidth: 0,
         }}
       >
-        ALTAGETHER
-      </span>
-      <span
-        style={{
-          fontFamily: V.fontDisplay,
-          fontSize: "0.72rem",
-          fontWeight: 700,
-          color: V.muted,
-          letterSpacing: "0.1em",
-          textTransform: "uppercase",
-        }}
-      >
-        Newsletter Builder
-      </span>
+        <span style={title}>ALTAGETHER</span>
+        <span style={title}>Newsletter Builder</span>
+      </div>
     </div>
   );
 }
@@ -448,7 +432,7 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
               overflow: "auto",
               ["--nl-accent"]: sectionColor,
             }}
-            dangerouslySetInnerHTML={{ __html: item.bodyHtml }}
+            dangerouslySetInnerHTML={{ __html: repairLegacyAmpDoubling(item.bodyHtml) }}
           />
         ) : (
           <>
@@ -685,7 +669,7 @@ function CaptainView({ newsletterData }) {
         plainParts.push("");
         htmlParts.push('<div style="margin-bottom:12px;padding-left:10px;border-left:3px solid rgba(0,0,0,0.08);">');
         if (item.bodyHtml) {
-          htmlParts.push(augmentEmailItemBodyHtml(item.bodyHtml));
+          htmlParts.push(augmentEmailItemBodyHtml(repairLegacyAmpDoubling(item.bodyHtml)));
         } else {
           htmlParts.push(`<p style="margin:0.25em 0;">${escapeHtmlPlain(item.text || "")}</p>`);
           if (item.links?.length) {
