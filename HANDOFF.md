@@ -120,16 +120,18 @@ All Supabase writes use the **service role** only inside these routes.
 
 ## Parsing model (why MailerLite HTML is fragile)
 
-The parser (`lib/parseNewsletterHtml.js`) targets **MailerLite-style** exports:
+The parser (`lib/parseNewsletterHtml.js`) targets **MailerLite-style** exports and is currently treated as **functionally ship-ready / frozen** after fixture work and an audit across the sample newsletters. Future parser edits should be rare: fix dropped content, sanitizer/security issues, or recurring severe failures; use **Admin → Review structure** for ordinary one-off ambiguity.
 
 - **Orange `#d35400` `h2`** = section headings (Recovery Updates, Events, …).
-- Items are inferred from block structure: runs of `p` / `h3` / `h4` followed by a `ul`/`ol` are often **merged into one item** (title + body + list). That helps normal events but can **merge two stories** if the HTML has no structural break before a shared list.
+- Items are inferred from block structure: `p` / `h3` / `h4` / `ul` / `ol` content becomes selectable items. Runs of text blocks followed by lists are merged carefully so event title/body/date lists stay together without swallowing unrelated prior cards.
 
-**Why boundaries are often wrong:** MailerLite exports frequently put **many distinct “offerings”** (resources, blurbs, deadlines) inside **one `<p>`**, separated only by **`<br><br>`** (or similar). That is still **one DOM paragraph**, so the parser sees **one block**, not many items. **Adding more `<br>` in the source does not create new blocks**—only extra whitespace inside the same `<p>`. The parser now makes a best-effort split of dense paragraphs at two-or-more `<br>` tags, including before a following list, but ambiguous authoring still needs review. Subsection titles stuffed at the end of a paragraph (e.g. bold line before a `<ul>`) also blur item boundaries. Real fixes are **heuristics or HTML normalization in this repo**, not expecting cleaner MailerLite output.
+**What the parser now handles:** dense `<p>` blocks split at two-or-more `<br>` separators; a narrow single-`<br>` split handles sentence-ending fragments followed by linked/bold lead-ins; normal `TITLE<br>description` cards stay merged; consecutive lists after event text stay with the event; empty list blocks are ignored; malformed/orphan nested lists attach to the previous item instead of losing content; leading/trailing spacer `<br>` noise is trimmed without removing meaningful inline spaces. These behaviors are covered by `npm run verify:parser`.
+
+**Known limits:** MailerLite can still produce ambiguous single-paragraph content where humans disagree about item boundaries. Large Links directory cards and multi-link advocacy/survey clusters may be valid. Do not chase perfect parsing with fragile one-off heuristics.
 
 **Product decision:** Rather than endless parser tweaks, **Admin → Review structure** lets a human merge/split items and **hide** junk cards (e.g. blank spacers). Hidden items use `_adminHidden: true` and are **omitted** from the captain picker and from built preview/email content.
 
-**Agent-oriented summary** of the segmentation problem and goals: [`docs/PARSING_PROBLEM_AGENT_PROMPT.md`](docs/PARSING_PROBLEM_AGENT_PROMPT.md).
+**Agent-oriented parser status / freeze brief:** [`docs/PARSING_PROBLEM_AGENT_PROMPT.md`](docs/PARSING_PROBLEM_AGENT_PROMPT.md).
 
 ---
 

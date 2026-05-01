@@ -1,18 +1,19 @@
-# Agent brief: Fix MailerLite HTML segmentation (Newsletter Builder)
+# Agent brief: MailerLite parser status (Newsletter Builder)
 
-**Give this entire document to an engineering agent.** Your job is not only to understand the situation—you are asked to **implement a solution** (or a concrete, justified phased plan with code if scope is large).
+**Current status:** the MailerLite parser is considered **functionally ship-ready and frozen** after a broad fixture/audit pass across the sample newsletters. Future agents should preserve this behavior by default.
+
+Do **not** treat parser work as an open-ended task. Only change parsing when there is clear evidence of:
+
+- dropped content,
+- a recurring severe over-merge/split across real samples,
+- a sanitizer/security issue,
+- or a product request that explicitly accepts parser risk.
+
+For ordinary edge cases, use **Admin → Review structure** (merge/split/hide) as the intended fallback.
 
 ---
 
-## Your mission
-
-**Solve unreliable splitting of the master newsletter into selectable items.** Today, MailerLite exports often cram many logical “offerings” into **one `<p>`** separated only by `<br><br>`. Our parser follows block-level DOM structure, so those offerings arrive as **a single parsed item** or with **wrong boundaries**. That pushes tedious work onto **Admin → Review structure** (manual merge/split).
-
-You must **reduce that failure mode** by changing **this repository**: parsing, HTML preprocessing/normalization, heuristics, and/or targeted admin UX—**without** assuming MailerLite authors or templates will change.
-
----
-
-## Product context (read once)
+## Product context
 
 | Step | System |
 |------|--------|
@@ -22,70 +23,81 @@ You must **reduce that failure mode** by changing **this repository**: parsing, 
 | Structure is corrected, issue published | Admin **Review structure** → publish |
 | Captains pick which items to include | Same app; **nothing is sent back to MailerLite** |
 
-MailerLite is **upstream only**. Fixes belong **here**.
+MailerLite is upstream only. Fixes, when needed, belong in this repo.
 
 ---
 
-## What “solved” looks like (acceptance criteria)
+## Parser behavior now covered
 
-Deliver changes that measurably improve segmentation. At minimum, articulate and verify:
+Primary logic lives in `lib/parseNewsletterHtml.js`; safe HTML serialization lives in `lib/sanitizeMailerLiteHtml.js`; manual structure edits live in `lib/issueStructure.js`.
 
-1. **Representative fixtures:** Use real or anonymized MailerLite HTML snippets where **one `<p>` previously produced one oversized item**—after your change, those segments should become **multiple distinct items** when that matches editorial intent, **or** document precisely why a subset must stay merged.
+Current parser coverage includes:
 
-2. **No regressions:** Existing parsed issues still load; **`/api/parse`** output remains compatible with publish, captain selection, and **`issueStructure.js`** (merge/split/hide, IDs). **`sanitizeMailerLiteHtml.js`** and preview/email output must not break.
+- Orange `#d35400` `h2` elements become newsletter sections.
+- `p`, `h3`, `h4`, `ul`, and `ol` blocks are eligible item content.
+- Dense MailerLite paragraphs split at two-or-more `<br>` separators.
+- A narrow single-`<br>` split exists only when the left fragment looks like a complete sentence and the next fragment starts with a linked/bold lead-in.
+- Normal `TITLE<br>description` cards remain merged.
+- Consecutive lists after event-like text are merged into the same item.
+- Empty list blocks are ignored so they do not force unrelated paragraph over-merges.
+- When several unrelated paragraphs precede a real list, the list attaches only to the trailing heading-like run.
+- Malformed/orphan nested lists are attached to the previous list item instead of being dropped.
+- Leading/trailing MailerLite spacer `<br>` noise is trimmed without removing meaningful inline spaces.
+- Existing output remains compatible with `/api/parse`, publish/save flows, captain selection, and Admin Review Structure.
 
-3. **Explicit testing:** Add or extend automated tests (or a repeatable script + documented manual checklist if tests are impractical) so future edits don’t silently re-merge paragraphs.
+Verification lives in `scripts/verify-parser-segmentation.mjs` and is run with:
 
-4. **Honest limits:** If perfect segmentation is impossible without ML, ship **best-effort parsing improvements** plus clear **in-app or code comments** on remaining edge cases—do **not** stop at description alone.
+```bash
+npm run verify:parser
+```
 
----
+Also run:
 
-## Technical facts you must use
-
-- **`<br><br>` inside one `<p>` does not create multiple DOM blocks.** More line breaks in the export do not fix segmentation unless **you** split or normalize markup (e.g. wrap fragments in block elements, split on heuristics, post-process serialized HTML).
-
-- Subsection titles **inside** the same `<p>` as the prior story (e.g. bold line before a `<ul>`) are a **boundary bug** until the parser or a preprocessor **cuts** them apart.
-
-- **`lib/parseNewsletterHtml.js`** is the primary extraction logic; **`pages/api/parse.js`** calls it. **`lib/issueStructure.js`** owns merge/split/hide semantics.
-
----
-
-## Required implementation direction (pick one or combine)
-
-You **must** ship **something** that advances segmentation—not documentation-only unless paired with a documented blocker and a smallest viable code change.
-
-Reasonable approaches:
-
-- **Pre-parse normalization:** Transform incoming HTML so intra-paragraph `<br><br>` boundaries become **separate block nodes** (or explicit markers the parser understands), with rules tuned for this newsletter’s patterns.
-
-- **Parser upgrades:** Walk text/HTML inside large `<p>` nodes and emit multiple items when separators / link clusters / bold titles match reliable patterns.
-
-- **Hybrid:** Normalize first, then simplify parser branches.
-
-- **Admin UX (secondary):** Bulk actions or clearer warnings only **supplement** parsing—they do **not** replace fixing the default parse when automation is feasible.
+```bash
+npm run build
+```
 
 ---
 
-## Files to touch first
+## Known limits
+
+Perfect segmentation is not expected. Do not add fragile heuristics for one-off editorial ambiguity.
+
+Known acceptable/manual cases:
+
+- Large Links-directory cards with many links are expected.
+- Multi-link survey or advocacy clusters may be editorially valid; split manually only when desired.
+- Single-`<br>` cases without sentence-ending punctuation before the next linked/bold lead should usually remain manual cleanup.
+- CTA patterns like `<a><strong>CTA</strong><br /></a>Body` can be intentional and should be preserved unless visibly broken.
+
+If a future issue has 1-3 odd cards, prefer Review Structure over parser churn.
+
+---
+
+## Files to inspect first
 
 | Area | Path |
 |------|------|
 | Parse MailerLite HTML → JSON | `lib/parseNewsletterHtml.js` |
 | Sanitize for display/email | `lib/sanitizeMailerLiteHtml.js` |
+| Parser verification fixtures | `scripts/verify-parser-segmentation.mjs` |
 | Merge / split / hide, renumber IDs | `lib/issueStructure.js` |
-| Parse API | `pages/api/parse.js` |
 | Admin structure UI | `components/AdminReviewStructure.js` |
+| Parse API | `pages/api/parse.js` |
 
-Broader context: **`HANDOFF.md`** at repo root.
-
----
-
-## Deliverables checklist
-
-- [ ] Code (and tests or verification procedure) that **improve default item boundaries** for MailerLite-style dense `<p>` sections.
-- [ ] Short note in PR or commit message: **what changed**, **how to validate**, **known remaining failures**.
-- [ ] Update **`HANDOFF.md`** parsing section **only if** behavior or operator workflow materially changes.
+Broader context: `HANDOFF.md`.
 
 ---
 
-*Problem framing aligned with Newsletter Builder maintainer handoff; revise this brief when parsing architecture changes.*
+## Future-change checklist
+
+Before changing parser/sanitizer behavior:
+
+- [ ] Confirm the failure is dropped content or recurring/severe across real samples.
+- [ ] Add a focused fixture to `scripts/verify-parser-segmentation.mjs`.
+- [ ] Preserve existing fixtures and `/api/parse` JSON shape.
+- [ ] Run `npm run verify:parser`.
+- [ ] Run `npm run build`.
+- [ ] Update `HANDOFF.md` only if behavior or operator workflow materially changes.
+
+*Last aligned after parser audit and freeze, May 2026.*

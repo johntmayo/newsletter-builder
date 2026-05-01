@@ -1,0 +1,21 @@
+---
+description: Preserve the frozen MailerLite parser behavior
+globs: lib/parseNewsletterHtml.js,lib/sanitizeMailerLiteHtml.js,scripts/verify-parser-segmentation.mjs,components/AdminReviewStructure.js,pages/api/parse.js
+alwaysApply: false
+---
+
+# MailerLite Parser Freeze
+
+The MailerLite parser is functionally ship-ready and should be treated as frozen.
+
+Only change parser/sanitizer behavior for dropped content, sanitizer/security problems, or recurring severe failures across real samples. Do not add one-off heuristics for ordinary editorial ambiguity; Admin Review Structure is the intended fallback for merge/split/hide cleanup.
+
+Before touching parser behavior:
+
+- Read `HANDOFF.md` and `docs/PARSING_PROBLEM_AGENT_PROMPT.md`.
+- Add or update a focused fixture in `scripts/verify-parser-segmentation.mjs`.
+- Preserve `/api/parse` JSON shape and `issueStructure.js` merge/split/hide compatibility.
+- Run `npm run verify:parser`.
+- Run `npm run build`.
+
+Known acceptable limits: large Links directory cards, multi-link advocacy/survey clusters, and ambiguous single-`<br>` cards may remain manual cleanup unless the user explicitly asks otherwise.

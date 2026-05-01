@@ -6,6 +6,7 @@ import { repairLegacyAmpDoubling } from "../lib/sanitizeMailerLiteHtml";
 const STORAGE_KEY = "altagether_newsletter_data";
 const CAPTAIN_CONFIG_STORAGE_KEY = "altagether_captain_config";
 const CUSTOM_ENTRIES_STORAGE_KEY = "altagether_custom_entries";
+const FULL_NEWSLETTER_URL = "https://altagether.org/newsletter";
 
 const DEFAULT_CAPTAIN_CONFIG = {
   name: "",
@@ -13,7 +14,6 @@ const DEFAULT_CAPTAIN_CONFIG = {
   zone: "",
   captains: [{ id: "c1", name: "", contact: "" }],
   zoneLinks: "",
-  headerImage: null,
 };
 
 const V = {
@@ -72,15 +72,6 @@ function fileToUtf8Text(file) {
     r.onload = () => res(typeof r.result === "string" ? r.result : "");
     r.onerror = () => rej(new Error("Read failed"));
     r.readAsText(file, "UTF-8");
-  });
-}
-
-function imageFileToDataUrl(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.onerror = () => rej(new Error("Read failed"));
-    r.readAsDataURL(file);
   });
 }
 
@@ -364,8 +355,8 @@ function injectPrintStyles() {
 
 const LOGO_IMG_HEIGHT = Math.round(40 * 1.2);
 
-/** @param {{ onDark?: boolean }} props — onDark: white logo + text on navy header; else logo (darkened) + navy text on light surfaces */
-function Logo({ onDark = false }) {
+/** @param {{ onDark?: boolean, subtitle?: string }} props — onDark: white logo + text on navy header; else logo (darkened) + navy text on light surfaces */
+function Logo({ onDark = false, subtitle = "" }) {
   const [imgOk, setImgOk] = useState(true);
   const titleStyle = {
     fontFamily: V.fontDisplay,
@@ -399,7 +390,14 @@ function Logo({ onDark = false }) {
           onError={() => setImgOk(false)}
         />
       ) : null}
-      <span style={titleStyle}>Newsletter Builder</span>
+      <span style={{ minWidth: 0 }}>
+        <span style={titleStyle}>Newsletter Builder</span>
+        {subtitle ? (
+          <span style={{ display: "block", marginTop: 3, fontSize: 12, lineHeight: 1.35, color: onDark ? "rgba(255,255,255,0.82)" : V.muted, fontFamily: V.fontBody, maxWidth: 560 }}>
+            {subtitle}
+          </span>
+        ) : null}
+      </span>
     </div>
   );
 }
@@ -795,7 +793,9 @@ function CustomEntryEditor({ entries, onChange }) {
             style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, resize: "vertical", boxSizing: "border-box", background: V.card, lineHeight: 1.6 }}
           />
           <div style={{ marginTop: 5, fontSize: 11, color: V.muted, lineHeight: 1.45 }}>
-            To add a link: put the clickable words in brackets and the web address in parentheses, like <code>[Register here](altagether.org)</code>.
+            <strong>To add a link:</strong> put the clickable words in brackets and the web address in parentheses.
+            <br />
+            Example: <code>[Register here](altagether.org)</code>
           </div>
           <div style={{ textAlign: "right", marginTop: 6 }}>
             <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "5px 12px", fontSize: 11 }}>Remove</Button>
@@ -811,7 +811,7 @@ function CustomEntryEditor({ entries, onChange }) {
 
 // ── Preview / Print output ─────────────────────────────────────────────────────
 function NewsletterPreview({ config, newsletterData, selectedIds, customEntries }) {
-  const { name, tagline, headerImage, zone, zoneLinks, captains } = config;
+  const { name, tagline, zone, zoneLinks, captains } = config;
   const date = newsletterData?.date || "";
   const captainLines = captainsWithContent(captains);
   const zl = (zoneLinks || "").trim();
@@ -821,10 +821,6 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
 
   return (
     <div style={{ fontFamily: V.fontBody, color: V.ink, background: V.card, maxWidth: 720, margin: "0 auto" }}>
-      {/* Header */}
-      {headerImage && (
-        <img src={headerImage} alt="Header" style={{ width: "100%", maxHeight: 200, objectFit: "cover", display: "block" }} />
-      )}
       <div className="nl-print-header" style={{ background: V.navy, padding: "24px 32px", color: V.white }}>
         <div className="nl-print-header-title" style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.03em", fontFamily: V.fontDisplay }}>{name || "Zone Newsletter"}</div>
         {tagline && (
@@ -957,7 +953,6 @@ function CaptainView({ newsletterData }) {
   const [activeSection, setActiveSection] = useState(null);
   const [copyStatus, setCopyStatus] = useState("");
   const [localDraftLoaded, setLocalDraftLoaded] = useState(false);
-  const headerRef = useRef();
   const printRef = useRef();
 
   useEffect(() => {
@@ -1194,6 +1189,12 @@ function CaptainView({ newsletterData }) {
   }
 
   const sections = newsletterData.sections || [];
+  const activeSectionIndex = sections.findIndex((s) => s.id === activeSection);
+  const activeIsNewsletterSection = activeSectionIndex >= 0;
+  const hasNextNewsletterSection = activeIsNewsletterSection && activeSectionIndex < sections.length - 1;
+  const goToNextNewsletterSection = () => {
+    if (hasNextNewsletterSection) setActiveSection(sections[activeSectionIndex + 1].id);
+  };
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
@@ -1302,28 +1303,6 @@ function CaptainView({ newsletterData }) {
             />
           </div>
 
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>Header Image (optional)</label>
-            <div
-              onClick={() => headerRef.current?.click()}
-              style={{
-                border: `2px dashed ${config.headerImage ? V.green : V.border}`, borderRadius: 8, padding: "20px",
-                textAlign: "center", cursor: "pointer", background: config.headerImage ? V.greenTint08 : V.inputBg,
-              }}
-            >
-              {config.headerImage
-                ? <img src={config.headerImage} alt="Header" style={{ maxHeight: 80, maxWidth: "100%", borderRadius: 4 }} />
-                : <div style={{ color: V.muted, fontSize: 13 }}>Click to upload header image</div>
-              }
-              <input ref={headerRef} type="file" accept="image/*" style={{ display: "none" }}
-                onChange={async e => {
-                  const f = e.target.files[0];
-                  if (f) updateConfig("headerImage", await imageFileToDataUrl(f));
-                }}
-              />
-            </div>
-          </div>
-
           <Button onClick={() => setStep(1)} style={{ width: "100%" }}>
             Next: Select Content →
           </Button>
@@ -1374,10 +1353,13 @@ function CaptainView({ newsletterData }) {
 
           {/* Items panel */}
           <div>
+            <div style={{ fontSize: 13, color: V.muted, marginBottom: 16, lineHeight: 1.55 }}>
+              Select the newsletter items you want to include, or that are most relevant to your neighbors. You can also add your own zone-specific updates; those will appear first in your finished newsletter.
+            </div>
             {activeSection === "custom" ? (
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, marginBottom: 4 }}>Zone-Specific Updates</div>
-                <div style={{ fontSize: 13, color: V.muted, marginBottom: 16 }}>Add your own neighborhood news, announcements, or updates.</div>
+                <div style={{ fontSize: 13, color: V.muted, marginBottom: 16 }}>Add your own neighborhood news, announcements, or reminders. These will appear as the top stories in your newsletter.</div>
                 <CustomEntryEditor entries={customEntries} onChange={setCustomEntries} />
               </div>
             ) : (() => {
@@ -1406,7 +1388,11 @@ function CaptainView({ newsletterData }) {
 
             <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginTop: 24, paddingTop: 16, borderTop: `1px solid ${V.border}` }}>
               <Button variant="secondary" onClick={() => setStep(0)}>← Back</Button>
-              <Button onClick={() => setStep(2)}>Preview & Print →</Button>
+              {hasNextNewsletterSection ? (
+                <Button onClick={goToNextNewsletterSection}>Next Section →</Button>
+              ) : (
+                <Button onClick={() => setStep(2)}>Preview & Print →</Button>
+              )}
             </div>
           </div>
         </div>
@@ -1419,7 +1405,9 @@ function CaptainView({ newsletterData }) {
             <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink }}>Preview & Print</div>
-                <div style={{ fontSize: 12, color: V.muted }}>{totalSelected} items selected</div>
+                <div style={{ fontSize: 12, color: V.muted, lineHeight: 1.45 }}>
+                  {totalSelected} items selected. Copy your newsletter into an email, or print/save it as a PDF if you want to print it or share it as an attachment.
+                </div>
               </div>
               <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginLeft: "auto" }}>
                 <Button variant="secondary" onClick={() => setStep(1)}>← Edit</Button>
@@ -1522,23 +1510,10 @@ export default function App() {
           zIndex: 100,
         }}
       >
-        <Logo onDark />
-        <div className="nl-mode-segmented" role="group" aria-label="App mode">
-          <button
-            type="button"
-            className={mode === "captain" ? "nl-mode-segmented--active" : ""}
-            onClick={() => setMode("captain")}
-          >
-            Build Newsletter
-          </button>
-          <button
-            type="button"
-            className={mode === "admin" ? "nl-mode-segmented--active" : ""}
-            onClick={() => setMode("admin")}
-          >
-            Admin
-          </button>
-        </div>
+        <Logo
+          onDark
+          subtitle="Create your own neighborhood newsletter by choosing items from the latest Altagether Newsletter and adding your own zone-specific updates."
+        />
       </header>
 
       {newsletterData && (
@@ -1566,6 +1541,27 @@ export default function App() {
               <span style={{ fontSize: 12, color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>• Next: {newsletterData.nextIssue}</span>
             )}
           </div>
+          {mode === "captain" ? (
+            <div
+              style={{
+                marginTop: 10,
+                background: V.card,
+                border: `1px solid ${V.border}`,
+                borderRadius: 8,
+                padding: "12px 16px",
+                color: V.ink,
+                fontFamily: V.fontBody,
+                fontSize: 13,
+                lineHeight: 1.6,
+              }}
+            >
+              Everything here starts with the latest issue of the Altagether Neighborhood Captain Newsletter. You can read the{" "}
+              <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: V.green, fontWeight: 700 }}>
+                full newsletter here
+              </a>
+              . Choose the items most relevant to your neighbors, then add your own local updates if you'd like. Your updates will appear as the top stories in your newsletter.
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -1582,6 +1578,24 @@ export default function App() {
           : <CaptainView newsletterData={newsletterData} />
         }
       </main>
+      <footer style={{ padding: "24px 16px 36px", textAlign: "center" }}>
+        <button
+          type="button"
+          onClick={() => setMode(mode === "admin" ? "captain" : "admin")}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: V.muted,
+            cursor: "pointer",
+            fontFamily: V.fontBody,
+            fontSize: 11,
+            textDecoration: "underline",
+            opacity: 0.75,
+          }}
+        >
+          {mode === "admin" ? "Back to newsletter builder" : "Admin access"}
+        </button>
+      </footer>
     </div>
   );
 }
