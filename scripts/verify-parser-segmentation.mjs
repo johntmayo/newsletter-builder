@@ -142,4 +142,30 @@ function onlySection(parsed) {
   assert.doesNotMatch(section.items[0].bodyHtml, /<br\s*\/?>\s*<\/p>/i);
 }
 
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Recovery Updates",
+      `
+        <ul>
+          <li>
+            <p>
+              <strong>INSURANCE</strong><br>
+              A delegation of fire survivors organized by EFSN secured three major wins.
+              <a href="https://example.test/penalty">Penalty deferment form<br><br></a>
+              <br><br>
+            </p>
+          </li>
+        </ul>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 1);
+  assert.match(section.items[0].text, /INSURANCE/);
+  assert.doesNotMatch(section.items[0].bodyHtml, /<br\s*\/?>\s*<\/p>/i);
+  assert.doesNotMatch(section.items[0].bodyHtml, /<br\s*\/?>\s*<\/a>/i);
+}
+
 console.log("Parser segmentation verification passed.");
