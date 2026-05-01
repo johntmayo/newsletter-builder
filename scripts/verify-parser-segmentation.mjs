@@ -98,6 +98,25 @@ function onlySection(parsed) {
 {
   const parsed = parseNewsletterHtml(
     issueWithSection(
+      "Events",
+      `
+        <p><strong>LitFest in the Dena | </strong><a href="https://example.test/schedule"><strong>Full Schedule</strong><br></a>Celebrate local literature and storytelling at this free annual festival.</p>
+        <ul>
+          <li><p>Friday, May 1 and Saturday, May 2<br><br></p></li>
+        </ul>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 1);
+  assert.match(section.items[0].bodyHtml, /Full Schedule<\/strong><br\s*\/?><\/a>Celebrate/);
+  assert.doesNotMatch(section.items[0].bodyHtml, /Schedule<\/strong><\/a>Celebrate/);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
       "Ongoing Support",
       `
         <p>
@@ -236,6 +255,24 @@ function onlySection(parsed) {
   const section = onlySection(parsed);
   assert.equal(section.items.length, 1);
   assert.match(section.items[0].text, /INSURANCE A delegation/);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Links",
+      `
+        <p><a href="https://example.test/library">Altadena Library eConnect</a></p>
+        <h3><a href="https://example.test/sidecca"><strong>SIDECCA</strong></a> RE-RE-RE-OPENS THIS SATURDAY!</h3>
+        <p>Free Sidecca mural tote bag for first 100 people</p>
+        <p>Saturday, May 9 @ 10-5 pm (2455 N Lake)</p>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 4);
+  assert.match(section.items[1].text, /SIDECCA RE-RE-RE-OPENS THIS SATURDAY!/);
 }
 
 console.log("Parser segmentation verification passed.");
