@@ -168,4 +168,74 @@ function onlySection(parsed) {
   assert.doesNotMatch(section.items[0].bodyHtml, /<br\s*\/?>\s*<\/a>/i);
 }
 
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Recovery Updates",
+      `
+        <ul>
+          <li>
+            <p>
+              <strong>TREES FOR ALTADENA</strong><br>
+              <strong>Altadena Green </strong>has put together a <a href="https://example.test/trees"><strong>list of recommended trees</strong></a> for Altadena. If you have an existing tree that needs watering, sign<a href="https://example.test/watering"><strong> up for free tree watering support</strong></a> from <strong>Amigos de los Rios</strong>.
+            </p>
+          </li>
+          <li>
+            <p>
+              <strong>Altadena Heritage </strong><a href="https://example.test/poppy"><strong>Golden Poppy 2026 Special Effort Awards</strong></a><strong> Nominations close on May 3</strong><br>
+              For properties at various stages of rebuilding.
+            </p>
+          </li>
+        </ul>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 2);
+  assert.match(section.items[0].bodyHtml, /Altadena Green <\/strong>has/);
+  assert.match(section.items[0].bodyHtml, /sign<a [^>]+><strong> up for free tree watering support/);
+  assert.match(section.items[1].bodyHtml, /Altadena Heritage <\/strong><a/);
+  assert.match(section.items[1].bodyHtml, /<\/a><strong> Nominations close on May 3/);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Ongoing Support",
+      `
+        <p>
+          <strong>Submit post-remediation home test results to EFRU's </strong><a href="https://example.test/map"><strong>contamination map</strong></a><strong>.</strong><br>
+          <a href="https://example.test/habitat"><strong>San Gabriel Valley Habitat</strong></a><strong> for Humanity is seeking retired builders, contractors, and skilled tradespeople</strong> who can volunteer their time and expertise to support home rebuilds: <a href="https://example.test/volunteer">Volunteer Application<br></a><br>
+        </p>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 2);
+  assert.match(section.items[0].text, /EFRU's contamination map/);
+  assert.doesNotMatch(section.items[0].text, /San Gabriel Valley Habitat/);
+  assert.match(section.items[1].text, /San Gabriel Valley Habitat/);
+  assert.match(section.items[1].text, /Volunteer Application/);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Recovery Updates",
+      `
+        <p>
+          <strong>INSURANCE</strong><br>
+          A delegation of fire survivors organized by EFSN fought for a suite of insurance reform bills.
+        </p>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 1);
+  assert.match(section.items[0].text, /INSURANCE A delegation/);
+}
+
 console.log("Parser segmentation verification passed.");
