@@ -73,6 +73,31 @@ function onlySection(parsed) {
 {
   const parsed = parseNewsletterHtml(
     issueWithSection(
+      "Events",
+      `
+        <p><strong>Fire Stories Project |</strong> <a href="https://example.test/register"><strong>Register</strong></a></p>
+        <p>Attend a moving performance at Boston Court Pasadena exploring personal narratives and resilience.</p>
+        <ul>
+          <li><p>Saturday, May 2 at 1:00 pm</p></li>
+        </ul>
+        <ul>
+          <li><p>Sunday, May 3 at 1:00 pm and 3:30 pm</p></li>
+        </ul>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 1);
+  assert.match(section.items[0].text, /Fire Stories Project/);
+  assert.match(section.items[0].text, /Saturday, May 2/);
+  assert.match(section.items[0].text, /Sunday, May 3/);
+  assert.equal(section.items[0].bodyHtml.match(/<ul>/g)?.length, 2);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
       "Ongoing Support",
       `
         <p>
@@ -93,6 +118,28 @@ function onlySection(parsed) {
   assert.doesNotMatch(section.items[0].text, /Call 555-0100/);
   assert.match(section.items[1].text, /New resource/);
   assert.match(section.items[1].text, /Call 555-0100/);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Community & Financial Support",
+      `
+        <p>
+          <br>
+          <a href="https://www.thestepfund.org/"><strong>The </strong><strong>Step Up Fund</strong></a><strong> is giving $2,500 to fire survivors who face eviction.</strong>
+          <br><br>
+        </p>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 1);
+  assert.match(section.items[0].text, /The Step Up Fund is giving/);
+  assert.equal(section.items[0].links.length, 1);
+  assert.doesNotMatch(section.items[0].bodyHtml, /<p>\s*<br/i);
+  assert.doesNotMatch(section.items[0].bodyHtml, /<br\s*\/?>\s*<\/p>/i);
 }
 
 console.log("Parser segmentation verification passed.");
