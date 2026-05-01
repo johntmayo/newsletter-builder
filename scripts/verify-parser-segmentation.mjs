@@ -275,4 +275,55 @@ function onlySection(parsed) {
   assert.match(section.items[1].text, /SIDECCA RE-RE-RE-OPENS THIS SATURDAY!/);
 }
 
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Recovery Updates",
+      `
+        <ul>
+          <li><strong>Lincoln Water Avenue Company Update</strong></li>
+          <ul>
+            <li><p>Water rates will increase 18% in 2026.</p></li>
+            <li><p>Standby fees based on meter size will be reinstated in 2026.</p></li>
+            <li><p>More info can be found in their <a href="https://example.test/notice">notification</a>.</p></li>
+          </ul>
+        </ul>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 1);
+  assert.match(section.items[0].text, /Lincoln Water Avenue Company Update/);
+  assert.match(section.items[0].text, /Water rates will increase 18%/);
+  assert.match(section.items[0].text, /Standby fees/);
+  assert.match(section.items[0].text, /notification/);
+  assert.match(section.items[0].bodyHtml, /<ul>/);
+  assert.equal(section.items[0].links.length, 1);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Recovery Updates",
+      `
+        <ul>
+          <li>
+            <strong>The Los Angeles County Sheriff's Department Altadena Station has a free Construction Check Program,</strong> to provide regular courtesy checks.
+          </li>
+          <ul>
+            <li>Email: <a href="mailto:altadenahomecheck@lasd.org">altadenahomecheck@lasd.org</a> with your name, address, and a valid callback number.</li>
+          </ul>
+        </ul>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 1);
+  assert.match(section.items[0].text, /Construction Check Program/);
+  assert.match(section.items[0].text, /altadenahomecheck@lasd\.org/);
+  assert.match(section.items[0].bodyHtml, /mailto:altadenahomecheck@lasd\.org/);
+}
+
 console.log("Parser segmentation verification passed.");
