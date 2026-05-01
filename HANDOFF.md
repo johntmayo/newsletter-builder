@@ -10,6 +10,17 @@ Volunteer **neighborhood captains** use the site to build a **zone-specific** ve
 
 An **admin** uploads the master issue (MailerLite HTML export), **parses** it into a private draft, **reviews structure** (merge/split/hide items), then **publishes** so **every visitor** loads that issue from shared storage—without retraining MailerLite authors.
 
+### Data flow (MailerLite vs this app)
+
+| Stage | Where it happens |
+|-------|------------------|
+| **Authoring** | **MailerLite** — newsletter editors build the master newsletter there. |
+| **Export** | Operator downloads the **HTML version** from MailerLite (not editable by this team). |
+| **Ingest + structure** | **Newsletter Builder (this app)** — upload HTML → parse → **Review structure** → publish to Supabase. |
+| **Customization** | **Captains** use this app only — select which master items to include; output is **not** sent back to MailerLite. |
+
+MailerLite is **upstream**; this product **consumes** its HTML. We **cannot** rely on changing MailerLite’s markup discipline to fix segmentation—improvements belong in **parsing, normalization, or admin tooling** here.
+
 ---
 
 ## User modes
@@ -114,7 +125,11 @@ The parser (`lib/parseNewsletterHtml.js`) targets **MailerLite-style** exports:
 - **Orange `#d35400` `h2`** = section headings (Recovery Updates, Events, …).
 - Items are inferred from block structure: runs of `p` / `h3` / `h4` followed by a `ul`/`ol` are often **merged into one item** (title + body + list). That helps normal events but can **merge two stories** if the HTML has no structural break before a shared list.
 
+**Why boundaries are often wrong:** MailerLite exports frequently put **many distinct “offerings”** (resources, blurbs, deadlines) inside **one `<p>`**, separated only by **`<br><br>`** (or similar). That is still **one DOM paragraph**, so the parser sees **one block**, not many items. **Adding more `<br>` in the source does not create new blocks**—only extra whitespace inside the same `<p>`. The parser now makes a best-effort split of dense paragraphs at two-or-more `<br>` tags, including before a following list, but ambiguous authoring still needs review. Subsection titles stuffed at the end of a paragraph (e.g. bold line before a `<ul>`) also blur item boundaries. Real fixes are **heuristics or HTML normalization in this repo**, not expecting cleaner MailerLite output.
+
 **Product decision:** Rather than endless parser tweaks, **Admin → Review structure** lets a human merge/split items and **hide** junk cards (e.g. blank spacers). Hidden items use `_adminHidden: true` and are **omitted** from the captain picker and from built preview/email content.
+
+**Agent-oriented summary** of the segmentation problem and goals: [`docs/PARSING_PROBLEM_AGENT_PROMPT.md`](docs/PARSING_PROBLEM_AGENT_PROMPT.md).
 
 ---
 
@@ -197,7 +212,7 @@ Use before shipping to confirm production compile.
 
 - **`newsletter-builder.jsx`** is not kept in sync with `pages/index.js` (older captain-only flow). Prefer the Next app for all work.  
 - Captain **configuration and selections** are not persisted server-side; refreshing loses work (by design unless you add persistence later).  
-- Parser will never be perfect for all MailerLite variants; keep **Review structure** as the escape hatch.
+- Parser will never be perfect for all MailerLite variants; keep **Review structure** as the escape hatch. See [`docs/PARSING_PROBLEM_AGENT_PROMPT.md`](docs/PARSING_PROBLEM_AGENT_PROMPT.md) for a shareable problem statement when iterating on parsing or normalization.
 
 ---
 
@@ -210,4 +225,4 @@ Product / org contacts (fill in for your handoff):
 
 ---
 
-*Last aligned with the codebase April 2026 (parse → review → publish admin flow); update this file when behavior or env requirements change.*
+*Last aligned with the codebase April 2026 (parse → review → publish admin flow; MailerLite ingest vs captain customization clarified); update this file when behavior or env requirements change.*
