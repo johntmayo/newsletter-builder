@@ -98,6 +98,52 @@ function onlySection(parsed) {
 {
   const parsed = parseNewsletterHtml(
     issueWithSection(
+      "Community & Financial Support",
+      `
+        <p><strong>Paint discount for survivors</strong></p>
+        <p>Reach out to your Neighborhood Captain for negotiated paint discounts.</p>
+        <p><a href="https://example.test/electric"><strong>All-Electric Incentives, Rebates & Grant</strong></a></p>
+        <p>You could get help paying for heat pumps, batteries, and induction stoves.</p>
+        <ul>
+          <li><p><a href="https://example.test/calehp">California Electric Homes Program</a></p></li>
+          <li><p><a href="https://example.test/rise">RISE Homes Program</a></p></li>
+        </ul>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 3);
+  assert.match(section.items[0].text, /Paint discount/);
+  assert.match(section.items[1].text, /Neighborhood Captain/);
+  assert.match(section.items[2].text, /All-Electric Incentives/);
+  assert.match(section.items[2].text, /RISE Homes Program/);
+  assert.equal(section.items[2].bodyHtml.match(/<ul>/g)?.length, 1);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
+      "Surveys",
+      `
+        <p><a href="https://example.test/laist"><strong>How LAist tells stories about LA</strong></a></p>
+        <p><a href="https://example.test/up"><strong>United Policyholders survey</strong></a></p>
+        <ul></ul>
+      `,
+    ),
+  );
+
+  const section = onlySection(parsed);
+  assert.equal(section.items.length, 2);
+  assert.match(section.items[0].text, /LAist/);
+  assert.match(section.items[1].text, /United Policyholders/);
+  assert.doesNotMatch(section.items[0].bodyHtml, /<ul><\/ul>/);
+  assert.doesNotMatch(section.items[1].bodyHtml, /<ul><\/ul>/);
+}
+
+{
+  const parsed = parseNewsletterHtml(
+    issueWithSection(
       "Events",
       `
         <p><strong>LitFest in the Dena | </strong><a href="https://example.test/schedule"><strong>Full Schedule</strong><br></a>Celebrate local literature and storytelling at this free annual festival.</p>
