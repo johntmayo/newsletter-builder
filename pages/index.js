@@ -4,6 +4,17 @@ import { repairLegacyAmpDoubling } from "../lib/sanitizeMailerLiteHtml";
 
 // ── Design tokens (CSS vars — see styles/globals.css & altagether-subpage-style.md)
 const STORAGE_KEY = "altagether_newsletter_data";
+const CAPTAIN_CONFIG_STORAGE_KEY = "altagether_captain_config";
+const CUSTOM_ENTRIES_STORAGE_KEY = "altagether_custom_entries";
+
+const DEFAULT_CAPTAIN_CONFIG = {
+  name: "",
+  tagline: "",
+  zone: "",
+  captains: [{ id: "c1", name: "", contact: "" }],
+  zoneLinks: "",
+  headerImage: null,
+};
 
 const V = {
   paper: "var(--bg-paper)",
@@ -121,10 +132,14 @@ function escapeHtmlAttr(s) {
 function safeCustomLinkHref(url) {
   const raw = String(url || "").trim();
   if (!raw) return "";
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+    return `mailto:${raw}`;
+  }
+  const normalized = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
   try {
-    const parsed = new URL(raw);
+    const parsed = new URL(normalized);
     if (parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "mailto:") {
-      return raw;
+      return normalized;
     }
   } catch (_) {}
   return "";
@@ -780,7 +795,7 @@ function CustomEntryEditor({ entries, onChange }) {
             style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, resize: "vertical", boxSizing: "border-box", background: V.card, lineHeight: 1.6 }}
           />
           <div style={{ marginTop: 5, fontSize: 11, color: V.muted, lineHeight: 1.45 }}>
-            Links only: write <code>[link text](https://example.org)</code>. No other formatting is supported.
+            To add a link: put the clickable words in brackets and the web address in parentheses, like <code>[Register here](altagether.org)</code>.
           </div>
           <div style={{ textAlign: "right", marginTop: 6 }}>
             <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "5px 12px", fontSize: 11 }}>Remove</Button>
@@ -936,20 +951,55 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
 // ── Captain Builder View ───────────────────────────────────────────────────────
 function CaptainView({ newsletterData }) {
   const [step, setStep] = useState(0); // 0=config, 1=select, 2=preview
-  const [config, setConfig] = useState({
-    name: "",
-    tagline: "",
-    zone: "",
-    captains: [{ id: "c1", name: "", contact: "" }],
-    zoneLinks: "",
-    headerImage: null,
-  });
+  const [config, setConfig] = useState(DEFAULT_CAPTAIN_CONFIG);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [customEntries, setCustomEntries] = useState([]);
   const [activeSection, setActiveSection] = useState(null);
   const [copyStatus, setCopyStatus] = useState("");
+  const [localDraftLoaded, setLocalDraftLoaded] = useState(false);
   const headerRef = useRef();
   const printRef = useRef();
+
+  useEffect(() => {
+    try {
+      const savedConfig = localStorage.getItem(CAPTAIN_CONFIG_STORAGE_KEY);
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        if (parsed && typeof parsed === "object") {
+          setConfig({
+            ...DEFAULT_CAPTAIN_CONFIG,
+            ...parsed,
+            captains: Array.isArray(parsed.captains) && parsed.captains.length
+              ? parsed.captains
+              : DEFAULT_CAPTAIN_CONFIG.captains,
+          });
+        }
+      }
+      const savedEntries = localStorage.getItem(CUSTOM_ENTRIES_STORAGE_KEY);
+      if (savedEntries) {
+        const parsed = JSON.parse(savedEntries);
+        if (Array.isArray(parsed)) setCustomEntries(parsed);
+      }
+    } catch (_) {
+      // Local drafts are convenience-only; ignore corrupt or unavailable storage.
+    } finally {
+      setLocalDraftLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!localDraftLoaded) return;
+    try {
+      localStorage.setItem(CAPTAIN_CONFIG_STORAGE_KEY, JSON.stringify(config));
+    } catch (_) {}
+  }, [config, localDraftLoaded]);
+
+  useEffect(() => {
+    if (!localDraftLoaded) return;
+    try {
+      localStorage.setItem(CUSTOM_ENTRIES_STORAGE_KEY, JSON.stringify(customEntries));
+    } catch (_) {}
+  }, [customEntries, localDraftLoaded]);
 
   useEffect(() => {
     if (newsletterData?.sections?.length > 0) {
