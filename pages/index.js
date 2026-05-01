@@ -114,6 +114,81 @@ function escapeHtmlPlain(s) {
     .replace(/>/g, "&gt;");
 }
 
+function escapeHtmlAttr(s) {
+  return escapeHtmlPlain(s).replace(/"/g, "&quot;");
+}
+
+function safeCustomLinkHref(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "mailto:") {
+      return raw;
+    }
+  } catch (_) {}
+  return "";
+}
+
+function parseCustomUpdateText(text) {
+  const source = String(text || "");
+  const parts = [];
+  const linkPattern = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+  let cursor = 0;
+  let match;
+
+  while ((match = linkPattern.exec(source)) !== null) {
+    const [raw, label, hrefRaw] = match;
+    const href = safeCustomLinkHref(hrefRaw);
+    if (!href) continue;
+    if (match.index > cursor) parts.push({ type: "text", text: source.slice(cursor, match.index) });
+    parts.push({ type: "link", label, href });
+    cursor = match.index + raw.length;
+  }
+
+  if (cursor < source.length) parts.push({ type: "text", text: source.slice(cursor) });
+  return parts.length ? parts : [{ type: "text", text: source }];
+}
+
+function customUpdateTextToPlain(text) {
+  return parseCustomUpdateText(text)
+    .map((part) => (part.type === "link" ? `${part.label} (${part.href})` : part.text))
+    .join("");
+}
+
+function customUpdateTextToHtml(text) {
+  return parseCustomUpdateText(text)
+    .map((part) => {
+      if (part.type === "link") {
+        return `<a href="${escapeHtmlAttr(part.href)}" rel="noopener noreferrer">${escapeHtmlPlain(part.label)}</a>`;
+      }
+      return escapeHtmlPlain(part.text);
+    })
+    .join("");
+}
+
+function CustomUpdateText({ text, color = V.green }) {
+  return (
+    <>
+      {parseCustomUpdateText(text).map((part, index) =>
+        part.type === "link" ? (
+          <a
+            key={index}
+            href={part.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color, textDecoration: "underline", fontWeight: 700 }}
+          >
+            {part.label}
+          </a>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 /** Inline tight list/paragraph spacing for email paste (client defaults are often very loose). */
 function augmentEmailItemBodyHtml(fragment) {
   function patchOpeningTag(tag, style) {
@@ -704,6 +779,9 @@ function CustomEntryEditor({ entries, onChange }) {
             rows={4}
             style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, resize: "vertical", boxSizing: "border-box", background: V.card, lineHeight: 1.6 }}
           />
+          <div style={{ marginTop: 5, fontSize: 11, color: V.muted, lineHeight: 1.45 }}>
+            Links only: write <code>[link text](https://example.org)</code>. No other formatting is supported.
+          </div>
           <div style={{ textAlign: "right", marginTop: 6 }}>
             <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "5px 12px", fontSize: 11 }}>Remove</Button>
           </div>
@@ -810,7 +888,9 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
                 {e.heading ? (
                   <div style={{ fontSize: 14, fontWeight: 700, fontFamily: V.fontBody, color: V.ink, marginBottom: 6 }}>{e.heading}</div>
                 ) : null}
-                <div style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-wrap", color: V.ink, fontFamily: V.fontBody }}>{e.text}</div>
+                <div style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-wrap", color: V.ink, fontFamily: V.fontBody }}>
+                  <CustomUpdateText text={e.text} color={CLAY_HEX} />
+                </div>
               </div>
             ))}
           </div>
@@ -949,7 +1029,7 @@ function CaptainView({ newsletterData }) {
       plainParts.push("");
       customWithText.forEach((e) => {
         if (e.heading) plainParts.push(e.heading);
-        plainParts.push(e.text);
+        plainParts.push(customUpdateTextToPlain(e.text));
         plainParts.push("");
       });
       htmlParts.push(
@@ -962,7 +1042,7 @@ function CaptainView({ newsletterData }) {
         if (e.heading) {
           htmlParts.push(`<p style="font-weight:700;margin:0 0 6px;font-size:14px;color:#1f2937;">${escapeHtmlPlain(e.heading)}</p>`);
         }
-        htmlParts.push(`<p style="white-space:pre-wrap;margin:0;font-size:14px;line-height:1.75;color:#1f2937;">${escapeHtmlPlain(e.text)}</p>`);
+        htmlParts.push(`<p style="white-space:pre-wrap;margin:0;font-size:14px;line-height:1.75;color:#1f2937;">${customUpdateTextToHtml(e.text)}</p>`);
         htmlParts.push("</div>");
       });
     }
