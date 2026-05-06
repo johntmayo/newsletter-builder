@@ -11,6 +11,7 @@ const FULL_NEWSLETTER_URL = "https://altagether.org/newsletter";
 const DEFAULT_CAPTAIN_CONFIG = {
   name: "",
   tagline: "",
+  issueDate: formatDisplayDate(new Date()),
   zone: "",
   captains: [{ id: "c1", name: "", contact: "" }],
   zoneLinks: "",
@@ -80,6 +81,15 @@ function getSectionColor(heading) {
     if (heading?.toLowerCase().includes(key.toLowerCase())) return color;
   }
   return SECTION_COLORS.Other;
+}
+
+function formatDisplayDate(date) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
 }
 
 /** Matches --accent-clay (for borders where CSS vars cannot be concatenated). */
@@ -811,8 +821,8 @@ function CustomEntryEditor({ entries, onChange }) {
 
 // ── Preview / Print output ─────────────────────────────────────────────────────
 function NewsletterPreview({ config, newsletterData, selectedIds, customEntries }) {
-  const { name, tagline, zone, zoneLinks, captains } = config;
-  const date = newsletterData?.date || "";
+  const { name, tagline, issueDate, zone, zoneLinks, captains } = config;
+  const date = (issueDate || "").trim();
   const captainLines = captainsWithContent(captains);
   const zl = (zoneLinks || "").trim();
   const hasLinksStrip = Boolean(zl);
@@ -1032,7 +1042,7 @@ function CaptainView({ newsletterData }) {
     const htmlParts = [];
     plainParts.push(config.name || "Zone Newsletter");
     if (config.tagline) plainParts.push(config.tagline);
-    if (newsletterData?.date) plainParts.push(newsletterData.date);
+    if ((config.issueDate || "").trim()) plainParts.push(config.issueDate.trim());
     if (config.zone) plainParts.push(config.zone);
     for (const c of captainsWithContent(config.captains)) {
       plainParts.push(formatCaptainLine(c));
@@ -1049,7 +1059,7 @@ function CaptainView({ newsletterData }) {
       htmlParts.push(`<p style="margin:0 0 10px;color:#374151;">${escapeHtmlPlain(config.tagline)}</p>`);
     }
     const metaBits = [];
-    if (newsletterData?.date) metaBits.push(escapeHtmlPlain(newsletterData.date));
+    if ((config.issueDate || "").trim()) metaBits.push(escapeHtmlPlain(config.issueDate.trim()));
     if (config.zone) metaBits.push(escapeHtmlPlain(config.zone));
     if (metaBits.length) {
       htmlParts.push(`<p style="margin:0 0 10px;color:#374151;font-size:13px;">${metaBits.join(" • ")}</p>`);
@@ -1203,7 +1213,7 @@ function CaptainView({ newsletterData }) {
         {["Configure", "Select Content", "Preview & Print"].map((label, i) => (
           <div
             key={i}
-            onClick={() => i < step || (i === 1 && step >= 0) || (i === 2 && step >= 1) ? setStep(i) : null}
+            onClick={() => setStep(i)}
             style={{
               padding: "12px 24px", fontSize: 13, fontWeight: i === step ? 800 : 500,
               color: i === step ? V.ink : V.muted, borderBottom: i === step ? `3px solid ${V.gold}` : "3px solid transparent",
@@ -1228,6 +1238,7 @@ function CaptainView({ newsletterData }) {
           {[
             { field: "name", label: "Newsletter Name", placeholder: "e.g. Zone 4 Neighbor Update" },
             { field: "tagline", label: "Tagline (optional)", placeholder: "e.g. News for Loma Alta neighbors" },
+            { field: "issueDate", label: "Newsletter Date (optional)", placeholder: "e.g. Wednesday, May 6, 2026" },
             { field: "zone", label: "Zone / Neighborhood", placeholder: "e.g. Zone 4 — Loma Alta" },
           ].map(({ field, label, placeholder }) => (
             <div key={field} style={{ marginBottom: 16 }}>
