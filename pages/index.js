@@ -6,6 +6,8 @@ import { repairLegacyAmpDoubling } from "../lib/sanitizeMailerLiteHtml";
 const STORAGE_KEY = "altagether_newsletter_data";
 const CAPTAIN_CONFIG_STORAGE_KEY = "altagether_captain_config";
 const CUSTOM_ENTRIES_STORAGE_KEY = "altagether_custom_entries";
+const SELECTED_IDS_STORAGE_KEY = "altagether_selected_ids";
+const BUILDER_STATE_STORAGE_KEY = "altagether_builder_state";
 const FULL_NEWSLETTER_URL = "https://altagether.org/newsletter";
 
 const DEFAULT_CAPTAIN_CONFIG = {
@@ -15,6 +17,7 @@ const DEFAULT_CAPTAIN_CONFIG = {
   zone: "",
   captains: [{ id: "c1", name: "", contact: "" }],
   zoneLinks: "",
+  stylePreset: "editorial",
 };
 
 const V = {
@@ -36,6 +39,48 @@ const V = {
   greenTint15: "rgba(40, 54, 24, 0.15)",
   clayTint: "rgba(188, 88, 56, 0.12)",
 };
+
+const NEWSLETTER_STYLE_PRESETS = {
+  editorial: {
+    id: "editorial",
+    label: "Editorial",
+    shortLabel: "Editorial",
+    description: "Warm, story-forward, and closest to a traditional neighborhood newsletter.",
+    bodyFont: V.fontBody,
+    emailFontFamily: "Merriweather, Georgia, serif",
+    header: "band",
+    item: "rule",
+  },
+  clean: {
+    id: "clean",
+    label: "Clean",
+    shortLabel: "Clean",
+    description: "A crisp sans-serif bulletin style for quick scanning and email readability.",
+    bodyFont: V.fontDisplay,
+    emailFontFamily: "Chivo, Arial, sans-serif",
+    header: "paper",
+    item: "card",
+  },
+};
+
+function getNewsletterStylePreset(id) {
+  return NEWSLETTER_STYLE_PRESETS[id] || NEWSLETTER_STYLE_PRESETS.editorial;
+}
+
+function issueDraftStorageSuffix(newsletterData) {
+  const raw = [
+    newsletterData?._uploadedAt,
+    newsletterData?.date,
+    newsletterData?.title,
+  ].filter(Boolean).join("__");
+  return raw
+    ? raw.replace(/[^a-z0-9_-]+/gi, "_").slice(0, 96)
+    : "current";
+}
+
+function selectedIdsStorageKey(newsletterData) {
+  return `${SELECTED_IDS_STORAGE_KEY}_${issueDraftStorageSuffix(newsletterData)}`;
+}
 
 /** Section rail colors — distinct hues for scanability (not all from core tokens). */
 const SECTION_COLORS = {
@@ -261,16 +306,16 @@ function countCaptainVisibleSelected(newsletterData, selectedIds) {
   return n;
 }
 
-function NewsletterItemBody({ item, sectionColor, appendixLinks }) {
+function NewsletterItemBody({ item, sectionColor, appendixLinks, bodyFont = V.fontBody, lineHeight = 1.65 }) {
   if (item.bodyHtml) {
     return (
       <div
         className="nl-item-body"
         style={{
           fontSize: "0.9rem",
-          lineHeight: 1.65,
+          lineHeight,
           color: "var(--text-primary)",
-          fontFamily: V.fontBody,
+          fontFamily: bodyFont,
           ["--nl-accent"]: sectionColor,
         }}
         dangerouslySetInnerHTML={{ __html: repairLegacyAmpDoubling(item.bodyHtml) }}
@@ -279,7 +324,7 @@ function NewsletterItemBody({ item, sectionColor, appendixLinks }) {
   }
   return (
     <>
-      <div style={{ fontSize: "0.9rem", lineHeight: 1.65, fontFamily: V.fontBody }}>{item.text}</div>
+      <div style={{ fontSize: "0.9rem", lineHeight, fontFamily: bodyFont }}>{item.text}</div>
       {appendixLinks && item.links?.length > 0 && (
         <div style={{ marginTop: 4 }}>
           {item.links.map((l, i) => (
@@ -819,6 +864,102 @@ function CustomEntryEditor({ entries, onChange }) {
   );
 }
 
+function StylePresetChooser({ value, onChange }) {
+  return (
+    <div className="nl-style-grid">
+      {Object.values(NEWSLETTER_STYLE_PRESETS).map((preset) => {
+        const selected = value === preset.id;
+        const clean = preset.id === "clean";
+        return (
+          <button
+            key={preset.id}
+            type="button"
+            onClick={() => onChange(preset.id)}
+            aria-pressed={selected}
+            style={{
+              textAlign: "left",
+              padding: 0,
+              overflow: "hidden",
+              background: selected ? V.greenTint08 : V.card,
+              border: `2px solid ${selected ? V.green : V.border}`,
+              borderRadius: 8,
+              boxShadow: selected ? "none" : V.cardShadow,
+              cursor: "pointer",
+              color: V.ink,
+            }}
+          >
+            <div
+              style={{
+                padding: "14px 16px",
+                borderBottom: `1px solid ${V.border}`,
+                background: clean ? "#f9fafb" : V.navy,
+                color: clean ? V.navy : V.white,
+                fontFamily: V.fontDisplay,
+              }}
+            >
+              <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: clean ? "0.01em" : "0.03em" }}>
+                {clean ? "Zone Bulletin" : "Zone Newsletter"}
+              </div>
+              <div style={{ marginTop: 4, fontSize: 11, opacity: clean ? 0.78 : 0.86 }}>
+                {clean ? "A quick guide for neighbors" : "Stories and updates for neighbors"}
+              </div>
+            </div>
+            <div style={{ padding: 16, fontFamily: preset.bodyFont }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ fontFamily: V.fontDisplay, fontSize: 13, fontWeight: 800, color: selected ? V.green : V.ink }}>
+                  {preset.label}
+                </div>
+                {selected ? (
+                  <span style={{ fontFamily: V.fontDisplay, fontSize: 10, fontWeight: 800, color: V.green, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                    Selected
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.5, color: V.muted }}>
+                {preset.description}
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <div
+                  style={{
+                    height: 6,
+                    width: "52%",
+                    background: clean ? V.gold : V.clay,
+                    borderRadius: 999,
+                    marginBottom: 8,
+                    opacity: 0.7,
+                  }}
+                />
+                <div style={{ height: 5, width: "84%", background: V.border, borderRadius: 999, marginBottom: 5 }} />
+                <div style={{ height: 5, width: "68%", background: V.border, borderRadius: 999 }} />
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function BuilderStatus({ config, preset, visibleSelectedCount, customEntryCount, draftNotice }) {
+  const title = (config.name || config.zone || "Your neighborhood newsletter").trim();
+  const totalSelected = visibleSelectedCount + customEntryCount;
+  return (
+    <div className="nl-builder-status">
+      <div>
+        <div style={{ fontFamily: V.fontDisplay, fontWeight: 800, fontSize: 14, color: V.ink }}>
+          {title}
+        </div>
+        <div style={{ marginTop: 2, color: V.muted, fontSize: 12 }}>
+          {preset.shortLabel} style · {visibleSelectedCount} newsletter items · {customEntryCount} zone updates
+        </div>
+      </div>
+      <div style={{ color: draftNotice ? V.green : V.muted, fontSize: 12, lineHeight: 1.45 }}>
+        {draftNotice || (totalSelected > 0 ? "Your draft is saved in this browser." : "Drafts save automatically in this browser.")}
+      </div>
+    </div>
+  );
+}
+
 // ── Preview / Print output ─────────────────────────────────────────────────────
 function NewsletterPreview({ config, newsletterData, selectedIds, customEntries }) {
   const { name, tagline, issueDate, zone, zoneLinks, captains } = config;
@@ -826,27 +967,76 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
   const captainLines = captainsWithContent(captains);
   const zl = (zoneLinks || "").trim();
   const hasLinksStrip = Boolean(zl);
+  const preset = getNewsletterStylePreset(config.stylePreset);
+  const clean = preset.id === "clean";
+  const headerText = clean ? V.navy : V.white;
+  const sectionHeadingStyle = (color) => clean
+    ? {
+        fontSize: 14,
+        fontWeight: 900,
+        fontFamily: V.fontDisplay,
+        color: V.ink,
+        borderLeft: `4px solid ${color}`,
+        background: "#f9fafb",
+        padding: "8px 10px",
+        marginBottom: 12,
+        letterSpacing: "0.03em",
+        textTransform: "uppercase",
+      }
+    : {
+        fontSize: 15,
+        fontWeight: 800,
+        fontFamily: V.fontDisplay,
+        color,
+        borderBottom: `2px solid ${color}`,
+        paddingBottom: 6,
+        marginBottom: 14,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+      };
+  const itemShellStyle = (color) => clean
+    ? {
+        marginBottom: 12,
+        padding: "12px 14px",
+        border: `1px solid ${V.border}`,
+        borderLeft: `4px solid ${color}`,
+        borderRadius: 6,
+        background: V.card,
+      }
+    : {
+        marginBottom: 14,
+        paddingLeft: 12,
+        borderLeft: `3px solid ${color}30`,
+      };
 
   const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
 
   return (
-    <div style={{ fontFamily: V.fontBody, color: V.ink, background: V.card, maxWidth: 720, margin: "0 auto" }}>
-      <div className="nl-print-header" style={{ background: V.navy, padding: "24px 32px", color: V.white }}>
+    <div style={{ fontFamily: preset.bodyFont, color: V.ink, background: V.card, maxWidth: 720, margin: "0 auto" }}>
+      <div
+        className="nl-print-header"
+        style={{
+          background: clean ? V.card : V.navy,
+          padding: "24px 32px",
+          color: headerText,
+          borderBottom: clean ? `4px solid ${V.gold}` : "none",
+        }}
+      >
         <div className="nl-print-header-title" style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.03em", fontFamily: V.fontDisplay }}>{name || "Zone Newsletter"}</div>
         {tagline && (
-          <div className="nl-print-header-tagline" style={{ fontSize: 14, opacity: 0.92, marginTop: 4 }}>
+          <div className="nl-print-header-tagline" style={{ fontSize: 14, opacity: clean ? 0.82 : 0.92, marginTop: 4 }}>
             {tagline}
           </div>
         )}
         {(date || zone) ? (
-          <div className="nl-print-header-meta" style={{ fontSize: 12, opacity: 0.88, marginTop: 8 }}>
+          <div className="nl-print-header-meta" style={{ fontSize: 12, opacity: clean ? 0.78 : 0.88, marginTop: 8 }}>
             {[date, zone].filter(Boolean).join(" • ")}
           </div>
         ) : null}
         {captainLines.length > 0 ? (
           <div
             className="nl-print-header-captains"
-            style={{ marginTop: 10, fontSize: 13, opacity: 0.92, lineHeight: 1.55, fontFamily: V.fontBody }}
+            style={{ marginTop: 10, fontSize: 13, opacity: clean ? 0.86 : 0.92, lineHeight: 1.55, fontFamily: preset.bodyFont }}
           >
             {captainLines.map((c, i) => (
               <div key={c.id || i}>{formatCaptainLine(c)}</div>
@@ -855,7 +1045,13 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         ) : null}
         <div
           className="nl-print-header-curated nl-print-header-rule"
-          style={{ marginTop: 12, fontSize: 12, opacity: 0.88, borderTop: "1px solid rgba(255,255,255,0.28)", paddingTop: 10 }}
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            opacity: clean ? 0.76 : 0.88,
+            borderTop: clean ? `1px solid ${V.border}` : "1px solid rgba(255,255,255,0.28)",
+            paddingTop: 10,
+          }}
         >
           Curated from the Altagether Neighborhood Captain Newsletter
         </div>
@@ -868,7 +1064,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
             padding: "18px 32px",
             background: V.inputBg,
             borderBottom: `1px solid ${V.border}`,
-            fontFamily: V.fontBody,
+            fontFamily: preset.bodyFont,
             fontSize: 13,
             lineHeight: 1.55,
             color: V.ink,
@@ -882,34 +1078,18 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         {/* Zone updates: one section title, entries styled like newsletter item cards */}
         {customEntries.filter((e) => e.text).length > 0 && (
           <div style={{ marginTop: 28 }}>
-            <div
-              style={{
-                fontSize: 15,
-                fontWeight: 800,
-                fontFamily: V.fontDisplay,
-                color: CLAY_HEX,
-                borderBottom: `2px solid ${CLAY_HEX}`,
-                paddingBottom: 6,
-                marginBottom: 14,
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-              }}
-            >
+            <div style={sectionHeadingStyle(CLAY_HEX)}>
               {zoneUpdatesSectionTitle(zone, name)}
             </div>
             {customEntries.filter((e) => e.text).map((e) => (
               <div
                 key={e.id}
-                style={{
-                  marginBottom: 14,
-                  paddingLeft: 12,
-                  borderLeft: `3px solid ${CLAY_HEX}4d`,
-                }}
+                style={itemShellStyle(CLAY_HEX)}
               >
                 {e.heading ? (
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: V.fontBody, color: V.ink, marginBottom: 6 }}>{e.heading}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: preset.bodyFont, color: V.ink, marginBottom: 6 }}>{e.heading}</div>
                 ) : null}
-                <div style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-wrap", color: V.ink, fontFamily: V.fontBody }}>
+                <div style={{ fontSize: 14, lineHeight: clean ? 1.6 : 1.75, whiteSpace: "pre-wrap", color: V.ink, fontFamily: preset.bodyFont }}>
                   <CustomUpdateText text={e.text} color={CLAY_HEX} />
                 </div>
               </div>
@@ -920,11 +1100,11 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         {/* Selected items from newsletter */}
         {selectedBySection.map(sec => (
           <div key={sec.id} style={{ marginTop: 28 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, fontFamily: V.fontDisplay, color: getSectionColor(sec.heading), borderBottom: `2px solid ${getSectionColor(sec.heading)}`, paddingBottom: 6, marginBottom: 14, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            <div style={sectionHeadingStyle(getSectionColor(sec.heading))}>
               {sec.heading}
             </div>
             {sec.items.map(item => (
-              <div key={item.id} style={{ marginBottom: 14, paddingLeft: 12, borderLeft: `3px solid ${getSectionColor(sec.heading)}30` }}>
+              <div key={item.id} style={itemShellStyle(getSectionColor(sec.heading))}>
                 {item.date && (
                   <div style={{ fontSize: 11, fontWeight: 700, color: getSectionColor(sec.heading), marginBottom: 2, letterSpacing: "0.06em" }}>
                     {item.date}{item.time ? ` @ ${item.time}` : ""}{item.location ? ` • ${item.location}` : ""}
@@ -934,6 +1114,8 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
                   item={item}
                   sectionColor={getSectionColor(sec.heading)}
                   appendixLinks={!item.bodyHtml}
+                  bodyFont={preset.bodyFont}
+                  lineHeight={clean ? 1.55 : 1.65}
                 />
               </div>
             ))}
@@ -963,9 +1145,12 @@ function CaptainView({ newsletterData }) {
   const [activeSection, setActiveSection] = useState(null);
   const [copyStatus, setCopyStatus] = useState("");
   const [localDraftLoaded, setLocalDraftLoaded] = useState(false);
+  const [selectedIssueKeyLoaded, setSelectedIssueKeyLoaded] = useState("");
+  const [draftNotice, setDraftNotice] = useState("");
   const printRef = useRef();
 
   useEffect(() => {
+    let restored = false;
     try {
       const savedConfig = localStorage.getItem(CAPTAIN_CONFIG_STORAGE_KEY);
       if (savedConfig) {
@@ -977,17 +1162,32 @@ function CaptainView({ newsletterData }) {
             captains: Array.isArray(parsed.captains) && parsed.captains.length
               ? parsed.captains
               : DEFAULT_CAPTAIN_CONFIG.captains,
+            stylePreset: getNewsletterStylePreset(parsed.stylePreset).id,
           });
+          restored = true;
         }
       }
       const savedEntries = localStorage.getItem(CUSTOM_ENTRIES_STORAGE_KEY);
       if (savedEntries) {
         const parsed = JSON.parse(savedEntries);
-        if (Array.isArray(parsed)) setCustomEntries(parsed);
+        if (Array.isArray(parsed)) {
+          setCustomEntries(parsed);
+          if (parsed.length) restored = true;
+        }
+      }
+      const savedBuilderState = localStorage.getItem(BUILDER_STATE_STORAGE_KEY);
+      if (savedBuilderState) {
+        const parsed = JSON.parse(savedBuilderState);
+        if (parsed && typeof parsed === "object") {
+          if ([0, 1, 2].includes(parsed.step)) setStep(parsed.step);
+          if (typeof parsed.activeSection === "string") setActiveSection(parsed.activeSection);
+          restored = true;
+        }
       }
     } catch (_) {
       // Local drafts are convenience-only; ignore corrupt or unavailable storage.
     } finally {
+      if (restored) setDraftNotice("Your draft was restored on this device.");
       setLocalDraftLoaded(true);
     }
   }, []);
@@ -1007,10 +1207,60 @@ function CaptainView({ newsletterData }) {
   }, [customEntries, localDraftLoaded]);
 
   useEffect(() => {
+    if (!localDraftLoaded || !newsletterData) return;
+    if (selectedIssueKeyLoaded !== issueDraftStorageSuffix(newsletterData)) return;
+    try {
+      localStorage.setItem(selectedIdsStorageKey(newsletterData), JSON.stringify([...selectedIds]));
+    } catch (_) {}
+  }, [selectedIds, localDraftLoaded, newsletterData, selectedIssueKeyLoaded]);
+
+  useEffect(() => {
+    if (!localDraftLoaded) return;
+    try {
+      localStorage.setItem(BUILDER_STATE_STORAGE_KEY, JSON.stringify({ step, activeSection }));
+    } catch (_) {}
+  }, [step, activeSection, localDraftLoaded]);
+
+  useEffect(() => {
+    if (!draftNotice) return undefined;
+    const t = setTimeout(() => setDraftNotice(""), 6500);
+    return () => clearTimeout(t);
+  }, [draftNotice]);
+
+  useEffect(() => {
     if (newsletterData?.sections?.length > 0) {
-      setActiveSection(newsletterData.sections[0].id);
+      setActiveSection((prev) => {
+        if (prev === "custom" || newsletterData.sections.some((s) => s.id === prev)) return prev;
+        return newsletterData.sections[0].id;
+      });
     }
   }, [newsletterData]);
+
+  useEffect(() => {
+    if (!localDraftLoaded || !newsletterData) return;
+    const issueKey = issueDraftStorageSuffix(newsletterData);
+    try {
+      const savedSelectedIds = localStorage.getItem(selectedIdsStorageKey(newsletterData));
+      if (!savedSelectedIds) {
+        setSelectedIds(new Set());
+        setSelectedIssueKeyLoaded(issueKey);
+        return;
+      }
+      const parsed = JSON.parse(savedSelectedIds);
+      if (Array.isArray(parsed)) {
+        const next = new Set(parsed.filter((id) => typeof id === "string"));
+        setSelectedIds(next);
+        setSelectedIssueKeyLoaded(issueKey);
+        if (next.size) setDraftNotice("Your draft was restored on this device.");
+      } else {
+        setSelectedIds(new Set());
+        setSelectedIssueKeyLoaded(issueKey);
+      }
+    } catch (_) {
+      setSelectedIds(new Set());
+      setSelectedIssueKeyLoaded(issueKey);
+    }
+  }, [newsletterData, localDraftLoaded]);
 
   function toggleItem(id) {
     setSelectedIds(prev => {
@@ -1038,6 +1288,14 @@ function CaptainView({ newsletterData }) {
   async function handleCopyForEmail() {
     const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
     const customWithText = customEntries.filter((e) => e.text);
+    const preset = getNewsletterStylePreset(config.stylePreset);
+    const clean = preset.id === "clean";
+    const emailSectionHeadingStyle = (color) => clean
+      ? `margin:18px 0 10px;font-size:16px;font-weight:800;letter-spacing:0.03em;text-transform:uppercase;color:#1f2937;border-left:4px solid ${escapeHtmlPlain(color)};background:#f9fafb;padding:8px 10px;line-height:1.25;`
+      : `margin:18px 0 8px;font-size:17px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:${escapeHtmlPlain(color)};border-bottom:2px solid ${escapeHtmlPlain(color)};padding-bottom:5px;line-height:1.25;`;
+    const emailItemStyle = (color) => clean
+      ? `margin-bottom:12px;padding:10px 12px;border:1px solid #e5e7eb;border-left:4px solid ${escapeHtmlPlain(color)};border-radius:6px;`
+      : `margin-bottom:12px;padding-left:10px;border-left:3px solid rgba(0,0,0,0.08);`;
     const plainParts = [];
     const htmlParts = [];
     plainParts.push(config.name || "Zone Newsletter");
@@ -1051,7 +1309,7 @@ function CaptainView({ newsletterData }) {
     if (zlPlain) plainParts.push(zlPlain);
     plainParts.push("");
 
-    htmlParts.push('<div style="font-family:Merriweather,Georgia,serif;font-size:14px;line-height:1.55;color:#1f2937;">');
+    htmlParts.push(`<div style="font-family:${preset.emailFontFamily};font-size:14px;line-height:${clean ? "1.5" : "1.55"};color:#1f2937;">`);
     htmlParts.push(
       `<p style="margin:0 0 6px;"><strong style="font-size:20px;line-height:1.2;">${escapeHtmlPlain(config.name || "Zone Newsletter")}</strong></p>`,
     );
@@ -1076,7 +1334,7 @@ function CaptainView({ newsletterData }) {
     if (zl) {
       htmlParts.push(`<p style="margin:0 0 14px;font-size:13px;line-height:1.55;color:#1f2937;">${escapeHtmlPlain(zl)}</p>`);
     }
-    htmlParts.push("<hr style=\"border:none;border-top:1px solid #ddd;margin:12px 0;\" />");
+    htmlParts.push(`<hr style="border:none;border-top:${clean ? "2px solid #f59e0b" : "1px solid #ddd"};margin:12px 0;" />`);
 
     if (customWithText.length > 0) {
       const zuTitle = zoneUpdatesSectionTitle(config.zone, config.name);
@@ -1087,17 +1345,15 @@ function CaptainView({ newsletterData }) {
         plainParts.push(customUpdateTextToPlain(e.text));
         plainParts.push("");
       });
-      htmlParts.push(
-        `<h3 style="margin:18px 0 8px;font-size:17px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:${CLAY_HEX};border-bottom:2px solid ${CLAY_HEX};padding-bottom:5px;line-height:1.25;">${escapeHtmlPlain(zuTitle)}</h3>`,
-      );
+      htmlParts.push(`<h3 style="${emailSectionHeadingStyle(CLAY_HEX)}">${escapeHtmlPlain(zuTitle)}</h3>`);
       customWithText.forEach((e) => {
         htmlParts.push(
-          `<div style="margin-bottom:12px;padding-left:10px;border-left:3px solid rgba(188,88,56,0.25);">`,
+          `<div style="${emailItemStyle(CLAY_HEX)}">`,
         );
         if (e.heading) {
           htmlParts.push(`<p style="font-weight:700;margin:0 0 6px;font-size:14px;color:#1f2937;">${escapeHtmlPlain(e.heading)}</p>`);
         }
-        htmlParts.push(`<p style="white-space:pre-wrap;margin:0;font-size:14px;line-height:1.75;color:#1f2937;">${customUpdateTextToHtml(e.text)}</p>`);
+        htmlParts.push(`<p style="white-space:pre-wrap;margin:0;font-size:14px;line-height:${clean ? "1.6" : "1.75"};color:#1f2937;">${customUpdateTextToHtml(e.text)}</p>`);
         htmlParts.push("</div>");
       });
     }
@@ -1106,13 +1362,11 @@ function CaptainView({ newsletterData }) {
       const col = getSectionColor(sec.heading);
       plainParts.push(sec.heading.toUpperCase());
       plainParts.push("");
-      htmlParts.push(
-        `<h3 style="margin:18px 0 8px;font-size:17px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:${escapeHtmlPlain(col)};border-bottom:2px solid ${escapeHtmlPlain(col)};padding-bottom:5px;line-height:1.25;">${escapeHtmlPlain(sec.heading)}</h3>`,
-      );
+      htmlParts.push(`<h3 style="${emailSectionHeadingStyle(col)}">${escapeHtmlPlain(sec.heading)}</h3>`);
       for (const item of sec.items) {
         plainParts.push(itemToPlainText(item));
         plainParts.push("");
-        htmlParts.push('<div style="margin-bottom:12px;padding-left:10px;border-left:3px solid rgba(0,0,0,0.08);">');
+        htmlParts.push(`<div style="${emailItemStyle(col)}">`);
         if (item.bodyHtml) {
           htmlParts.push(augmentEmailItemBodyHtml(repairLegacyAmpDoubling(item.bodyHtml)));
         } else {
@@ -1184,7 +1438,9 @@ function CaptainView({ newsletterData }) {
   }
 
   const visibleSelectedCount = countCaptainVisibleSelected(newsletterData, selectedIds);
-  const totalSelected = visibleSelectedCount + customEntries.filter(e => e.text).length;
+  const customEntryCount = customEntries.filter(e => e.text).length;
+  const totalSelected = visibleSelectedCount + customEntryCount;
+  const currentPreset = getNewsletterStylePreset(config.stylePreset);
 
   if (!newsletterData) {
     return (
@@ -1202,16 +1458,30 @@ function CaptainView({ newsletterData }) {
   const activeSectionIndex = sections.findIndex((s) => s.id === activeSection);
   const activeIsNewsletterSection = activeSectionIndex >= 0;
   const hasNextNewsletterSection = activeIsNewsletterSection && activeSectionIndex < sections.length - 1;
+  const sectionProgressLabel = activeIsNewsletterSection
+    ? `Section ${activeSectionIndex + 1} of ${sections.length}`
+    : "Zone updates";
   const goToNextNewsletterSection = () => {
     if (hasNextNewsletterSection) setActiveSection(sections[activeSectionIndex + 1].id);
   };
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
+      <BuilderStatus
+        config={config}
+        preset={currentPreset}
+        visibleSelectedCount={visibleSelectedCount}
+        customEntryCount={customEntryCount}
+        draftNotice={draftNotice}
+      />
+
       {/* Steps */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: `2px solid ${V.border}` }}>
+      <div className="nl-step-tabs" role="tablist" aria-label="Newsletter builder steps" style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: `2px solid ${V.border}` }}>
         {["Configure", "Select Content", "Preview & Print"].map((label, i) => (
-          <div
+          <button
+            type="button"
+            role="tab"
+            aria-selected={i === step}
             key={i}
             onClick={() => setStep(i)}
             style={{
@@ -1219,19 +1489,23 @@ function CaptainView({ newsletterData }) {
               color: i === step ? V.ink : V.muted, borderBottom: i === step ? `3px solid ${V.gold}` : "3px solid transparent",
               cursor: "pointer", fontFamily: V.fontDisplay, letterSpacing: "0.03em",
               marginBottom: -2, transition: "all 0.15s",
+              borderTop: "none",
+              borderLeft: "none",
+              borderRight: "none",
+              background: "transparent",
             }}
           >
             <span style={{ opacity: 0.5, marginRight: 6 }}>{i + 1}.</span>{label}
             {i === 1 && totalSelected > 0 && (
               <span style={{ marginLeft: 8, background: V.green, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 10, fontWeight: 800 }}>{totalSelected}</span>
             )}
-          </div>
+          </button>
         ))}
       </div>
 
       {/* Step 0: Configure */}
       {step === 0 && (
-        <div style={{ maxWidth: 560, margin: "0 auto" }}>
+        <div style={{ maxWidth: 680, margin: "0 auto" }}>
           <div style={{ fontSize: 18, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 4 }}>Configure Your Newsletter</div>
           <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Set up the basics for your zone's version of the newsletter.</div>
 
@@ -1250,6 +1524,19 @@ function CaptainView({ newsletterData }) {
               />
             </div>
           ))}
+
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Choose a style
+            </div>
+            <div style={{ fontSize: 12, color: V.muted, lineHeight: 1.5, marginBottom: 10 }}>
+              Pick the overall feel of the finished newsletter. You can switch styles later without losing your content.
+            </div>
+            <StylePresetChooser
+              value={currentPreset.id}
+              onChange={(presetId) => updateConfig("stylePreset", presetId)}
+            />
+          </div>
 
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 10, letterSpacing: "0.06em", textTransform: "uppercase" }}>
@@ -1324,13 +1611,14 @@ function CaptainView({ newsletterData }) {
       {step === 1 && (
         <div className="nl-captain-grid">
           {/* Section nav */}
-          <div style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, overflow: "hidden", alignSelf: "start", position: "sticky", top: 20 }}>
+          <div className="nl-section-rail" style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, overflow: "hidden", alignSelf: "start", position: "sticky", top: 20 }}>
             <div style={{ padding: "12px 16px", background: V.border, fontSize: 11, fontWeight: 800, fontFamily: V.fontDisplay, color: V.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Sections</div>
             {sections.map(sec => {
               const color = getSectionColor(sec.heading);
               const count = captainVisibleItems(sec.items).filter((i) => selectedIds.has(i.id)).length;
               return (
-                <div
+                <button
+                  type="button"
                   key={sec.id}
                   onClick={() => setActiveSection(sec.id)}
                   style={{
@@ -1339,16 +1627,22 @@ function CaptainView({ newsletterData }) {
                     borderLeft: `3px solid ${activeSection === sec.id ? color : "transparent"}`,
                     transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "space-between",
                     color: activeSection === sec.id ? color : V.ink,
+                    width: "100%",
+                    borderTop: "none",
+                    borderRight: "none",
+                    borderBottom: "none",
+                    textAlign: "left",
                   }}
                 >
                   <span style={{ fontWeight: activeSection === sec.id ? 700 : 400 }}>{sec.heading}</span>
                   {count > 0 && (
                     <span style={{ background: color, color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10, fontWeight: 800 }}>{count}</span>
                   )}
-                </div>
+                </button>
               );
             })}
-            <div
+            <button
+              type="button"
               onClick={() => setActiveSection("custom")}
               style={{
                 padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
@@ -1356,16 +1650,21 @@ function CaptainView({ newsletterData }) {
                 borderLeft: `3px solid ${activeSection === "custom" ? V.clay : "transparent"}`,
                 color: activeSection === "custom" ? V.clay : V.ink, fontWeight: activeSection === "custom" ? 700 : 400,
                 borderTop: `1px solid ${V.border}`, marginTop: 4,
+                borderRight: "none",
+                borderBottom: "none",
+                width: "100%",
+                textAlign: "left",
               }}
             >
               + Zone Updates
-            </div>
+            </button>
           </div>
 
           {/* Items panel */}
           <div>
             <div style={{ fontSize: 13, color: V.muted, marginBottom: 16, lineHeight: 1.55 }}>
-              Select the newsletter items you want to include, or that are most relevant to your neighbors. You can also add your own zone-specific updates; those will appear first in your finished newsletter.
+              <strong style={{ color: V.ink }}>{sectionProgressLabel}.</strong>{" "}
+              Select the newsletter items that are most relevant to your neighbors. You can also add your own zone-specific updates; those will appear first in your finished newsletter.
             </div>
             {activeSection === "custom" ? (
               <div>
@@ -1400,7 +1699,7 @@ function CaptainView({ newsletterData }) {
             <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginTop: 24, paddingTop: 16, borderTop: `1px solid ${V.border}` }}>
               <Button variant="secondary" onClick={() => setStep(0)}>← Back</Button>
               {hasNextNewsletterSection ? (
-                <Button onClick={goToNextNewsletterSection}>Next Section →</Button>
+                <Button onClick={goToNextNewsletterSection}>Next Section ({activeSectionIndex + 2} of {sections.length}) →</Button>
               ) : (
                 <Button onClick={() => setStep(2)}>Preview & Print →</Button>
               )}
@@ -1417,13 +1716,13 @@ function CaptainView({ newsletterData }) {
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink }}>Preview & Print</div>
                 <div style={{ fontSize: 12, color: V.muted, lineHeight: 1.45 }}>
-                  {totalSelected} items selected. Copy your newsletter into an email, or print/save it as a PDF if you want to print it or share it as an attachment.
+                  {totalSelected} items selected in the {currentPreset.shortLabel} style. Copy works best from a computer, where you can paste the finished newsletter into Gmail or Outlook.
                 </div>
               </div>
               <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginLeft: "auto" }}>
                 <Button variant="secondary" onClick={() => setStep(1)}>← Edit</Button>
-                <Button variant="secondary" onClick={handleCopyForEmail}>📋 Copy for email</Button>
-                <Button onClick={handlePrint}>🖨 Print / Save PDF</Button>
+                <Button variant="secondary" onClick={handleCopyForEmail}>Copy for email</Button>
+                <Button onClick={handlePrint}>Print / Save PDF</Button>
               </div>
             </div>
             {copyStatus && (
@@ -1446,7 +1745,7 @@ function CaptainView({ newsletterData }) {
             <NewsletterPreview config={config} newsletterData={newsletterData} selectedIds={selectedIds} customEntries={customEntries} />
           </div>
           <div style={{ textAlign: "center", marginTop: 12, fontSize: 12, color: V.muted }}>
-            Use your browser's Print dialog (Ctrl+P / Cmd+P) and choose "Save as PDF" for a PDF file.
+            Drafts are saved only in this browser. Use your browser's Print dialog (Ctrl+P / Cmd+P) and choose "Save as PDF" for a PDF file.
           </div>
         </div>
       )}

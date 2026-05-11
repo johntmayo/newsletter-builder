@@ -55,6 +55,14 @@ body {
   cursor: not-allowed;
 }
 
+.nl-btn:focus-visible,
+.nl-step-tabs button:focus-visible,
+.nl-section-rail button:focus-visible,
+.nl-style-grid button:focus-visible {
+  outline: 3px solid rgba(245, 158, 11, 0.55);
+  outline-offset: 2px;
+}
+
 .nl-btn-primary {
   background: var(--accent-green);
   color: #fff;
@@ -124,6 +132,26 @@ body {
   min-height: 600px;
 }
 
+.nl-builder-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-left: 4px solid var(--accent-gold);
+  border-radius: 8px;
+  box-shadow: var(--nl-card-shadow);
+}
+
+.nl-style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
 .nl-mode-segmented {
   display: flex;
   border: 2px solid rgba(255, 255, 255, 0.4);
@@ -173,5 +201,39 @@ body {
 
   .nl-captain-grid {
     grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .nl-builder-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .nl-style-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nl-step-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nl-step-tabs button {
+    flex: 0 0 auto;
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+    white-space: nowrap;
+  }
+
+  .nl-section-rail {
+    position: static !important;
+  }
+
+  .nl-step-toolbar {
+    width: 100%;
+  }
+
+  .nl-step-toolbar .nl-btn {
+    flex: 1 1 100%;
   }
 }
