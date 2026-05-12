@@ -43,9 +43,9 @@ const V = {
 const NEWSLETTER_STYLE_PRESETS = {
   editorial: {
     id: "editorial",
-    label: "Editorial",
-    shortLabel: "Editorial",
-    description: "Warm, story-forward, and closest to a traditional neighborhood newsletter.",
+    label: "Newsprint",
+    shortLabel: "Newsprint",
+    description: "Serif font. A more traditional newsletter look.",
     bodyFont: V.fontBody,
     emailFontFamily: "Merriweather, Georgia, serif",
     header: "band",
@@ -53,9 +53,9 @@ const NEWSLETTER_STYLE_PRESETS = {
   },
   clean: {
     id: "clean",
-    label: "Clean",
-    shortLabel: "Clean",
-    description: "A crisp sans-serif bulletin style for quick scanning and email readability.",
+    label: "Modern",
+    shortLabel: "Modern",
+    description: "Sans serif font. A slightly more compact, modern look.",
     bodyFont: V.fontDisplay,
     emailFontFamily: "Chivo, Arial, sans-serif",
     header: "paper",
@@ -369,35 +369,55 @@ function injectPrintStyles() {
         top: 0;
         width: 100%;
         background: #fff;
+        font-size: 12px !important;
       }
+      #print-root .nl-item-body {
+        font-size: 12px !important;
+        line-height: 1.45 !important;
+      }
+      #print-root .nl-item-body p { margin: 0.22em 0 !important; }
+      #print-root .nl-item-body ul, #print-root .nl-item-body ol {
+        margin: 0.25em 0 0.38em !important;
+        padding-left: 1.2em !important;
+      }
+      #print-root .nl-item-body li { margin: 0.12em 0 !important; }
       /* PDF / print: force dark text on white so tagline and meta stay legible without background graphics. */
       #print-root .nl-print-header {
         background: #fff !important;
         color: #1f2937 !important;
         border-bottom: 3px solid #314059 !important;
+        padding: 18px 28px !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
       #print-root .nl-print-header .nl-print-header-title {
+        font-size: 22px !important;
         color: #111827 !important;
         opacity: 1 !important;
       }
       #print-root .nl-print-header .nl-print-header-tagline {
+        font-size: 12px !important;
         color: #374151 !important;
         opacity: 1 !important;
       }
       #print-root .nl-print-header .nl-print-header-meta {
+        font-size: 11px !important;
         color: #374151 !important;
         opacity: 1 !important;
       }
       #print-root .nl-print-header .nl-print-header-curated {
+        font-size: 10.5px !important;
         color: #4b5563 !important;
         opacity: 1 !important;
+      }
+      #print-root .nl-print-header .nl-print-header-curated a {
+        color: #4b5563 !important;
       }
       #print-root .nl-print-header .nl-print-header-rule {
         border-top-color: #d1d5db !important;
       }
       #print-root .nl-print-header .nl-print-header-captains {
+        font-size: 11.5px !important;
         color: #374151 !important;
         opacity: 1 !important;
       }
@@ -898,10 +918,10 @@ function StylePresetChooser({ value, onChange }) {
               }}
             >
               <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: clean ? "0.01em" : "0.03em" }}>
-                {clean ? "Zone Bulletin" : "Zone Newsletter"}
+                {clean ? "Modern" : "Newsprint"}
               </div>
               <div style={{ marginTop: 4, fontSize: 11, opacity: clean ? 0.78 : 0.86 }}>
-                {clean ? "A quick guide for neighbors" : "Stories and updates for neighbors"}
+                {clean ? "Sans serif" : "Serif"}
               </div>
             </div>
             <div style={{ padding: 16, fontFamily: preset.bodyFont }}>
@@ -970,6 +990,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
   const preset = getNewsletterStylePreset(config.stylePreset);
   const clean = preset.id === "clean";
   const headerText = clean ? V.navy : V.white;
+  const headerTitleFont = clean ? V.fontDisplay : preset.bodyFont;
   const sectionHeadingStyle = (color) => clean
     ? {
         fontSize: 14,
@@ -1022,7 +1043,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
           borderBottom: clean ? `4px solid ${V.gold}` : "none",
         }}
       >
-        <div className="nl-print-header-title" style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.03em", fontFamily: V.fontDisplay }}>{name || "Zone Newsletter"}</div>
+        <div className="nl-print-header-title" style={{ fontSize: 26, fontWeight: 900, letterSpacing: "0.02em", fontFamily: headerTitleFont }}>{name || "Zone Newsletter"}</div>
         {tagline && (
           <div className="nl-print-header-tagline" style={{ fontSize: 14, opacity: clean ? 0.82 : 0.92, marginTop: 4 }}>
             {tagline}
@@ -1036,7 +1057,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         {captainLines.length > 0 ? (
           <div
             className="nl-print-header-captains"
-            style={{ marginTop: 10, fontSize: 13, opacity: clean ? 0.86 : 0.92, lineHeight: 1.55, fontFamily: preset.bodyFont }}
+            style={{ marginTop: 10, fontSize: 12.5, opacity: clean ? 0.86 : 0.92, lineHeight: 1.5, fontFamily: preset.bodyFont }}
           >
             {captainLines.map((c, i) => (
               <div key={c.id || i}>{formatCaptainLine(c)}</div>
@@ -1053,7 +1074,10 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
             paddingTop: 10,
           }}
         >
-          Curated from the Altagether Neighborhood Captain Newsletter
+          Curated from the{" "}
+          <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: headerText, textDecoration: "underline", fontWeight: 700 }}>
+            Altagether Neighborhood Captain Newsletter
+          </a>
         </div>
       </div>
 
@@ -1089,7 +1113,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
                 {e.heading ? (
                   <div style={{ fontSize: 14, fontWeight: 700, fontFamily: preset.bodyFont, color: V.ink, marginBottom: 6 }}>{e.heading}</div>
                 ) : null}
-                <div style={{ fontSize: 14, lineHeight: clean ? 1.6 : 1.75, whiteSpace: "pre-wrap", color: V.ink, fontFamily: preset.bodyFont }}>
+                <div style={{ fontSize: 13, lineHeight: clean ? 1.5 : 1.6, whiteSpace: "pre-wrap", color: V.ink, fontFamily: preset.bodyFont }}>
                   <CustomUpdateText text={e.text} color={CLAY_HEX} />
                 </div>
               </div>
@@ -1115,7 +1139,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
                   sectionColor={getSectionColor(sec.heading)}
                   appendixLinks={!item.bodyHtml}
                   bodyFont={preset.bodyFont}
-                  lineHeight={clean ? 1.55 : 1.65}
+                  lineHeight={clean ? 1.45 : 1.55}
                 />
               </div>
             ))}
@@ -1328,7 +1352,7 @@ function CaptainView({ newsletterData }) {
       );
     }
     htmlParts.push(
-      '<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;line-height:1.45;">Curated from the Altagether Neighborhood Captain Newsletter</p>',
+      `<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;line-height:1.45;">Curated from the <a href="${FULL_NEWSLETTER_URL}" style="color:#4b5563;text-decoration:underline;">Altagether Neighborhood Captain Newsletter</a></p>`,
     );
     const zl = zlPlain;
     if (zl) {
@@ -1525,19 +1549,6 @@ function CaptainView({ newsletterData }) {
             </div>
           ))}
 
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Choose a style
-            </div>
-            <div style={{ fontSize: 12, color: V.muted, lineHeight: 1.5, marginBottom: 10 }}>
-              Pick the overall feel of the finished newsletter. You can switch styles later without losing your content.
-            </div>
-            <StylePresetChooser
-              value={currentPreset.id}
-              onChange={(presetId) => updateConfig("stylePreset", presetId)}
-            />
-          </div>
-
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 10, letterSpacing: "0.06em", textTransform: "uppercase" }}>
               Captains (optional)
@@ -1730,6 +1741,19 @@ function CaptainView({ newsletterData }) {
             )}
           </div>
 
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Choose a style
+            </div>
+            <div style={{ fontSize: 12, color: V.muted, lineHeight: 1.5, marginBottom: 10 }}>
+              Choose the format before copying to email or printing to PDF.
+            </div>
+            <StylePresetChooser
+              value={currentPreset.id}
+              onChange={(presetId) => updateConfig("stylePreset", presetId)}
+            />
+          </div>
+
           <div
             id="print-root"
             ref={printRef}
@@ -1865,7 +1889,7 @@ export default function App() {
                 lineHeight: 1.6,
               }}
             >
-              Everything here starts with the latest issue of the Altagether Neighborhood Captain Newsletter. You can read the{" "}
+              Everything here comes from the latest issue of the Altagether Neighborhood Captain Newsletter. You can read the{" "}
               <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: V.green, fontWeight: 700 }}>
                 full newsletter here
               </a>
