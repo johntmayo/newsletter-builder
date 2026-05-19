@@ -381,17 +381,18 @@ function injectPrintStyles() {
         padding-left: 1.2em !important;
       }
       #print-root .nl-item-body li { margin: 0.12em 0 !important; }
-      /* PDF / print: force dark text on white so tagline and meta stay legible without background graphics. */
+      /* PDF / print: use a white masthead so it survives printers that skip background graphics. */
       #print-root .nl-print-header {
         background: #fff !important;
         color: #1f2937 !important;
+        border-top: 5px solid #314059 !important;
         border-bottom: 3px solid #314059 !important;
         padding: 18px 28px !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
       #print-root .nl-print-header .nl-print-header-title {
-        font-size: 22px !important;
+        font-size: 24px !important;
         color: #111827 !important;
         opacity: 1 !important;
       }
@@ -911,10 +912,11 @@ function StylePresetChooser({ value, onChange }) {
             <div
               style={{
                 padding: "14px 16px",
+                borderTop: clean ? "none" : `6px solid ${V.navy}`,
                 borderBottom: `1px solid ${V.border}`,
-                background: clean ? "#f9fafb" : V.navy,
-                color: clean ? V.navy : V.white,
-                fontFamily: V.fontDisplay,
+                background: clean ? "#f9fafb" : V.card,
+                color: clean ? V.navy : V.ink,
+                fontFamily: clean ? V.fontDisplay : preset.bodyFont,
               }}
             >
               <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: clean ? "0.01em" : "0.03em" }}>
@@ -926,7 +928,7 @@ function StylePresetChooser({ value, onChange }) {
             </div>
             <div style={{ padding: 16, fontFamily: preset.bodyFont }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <div style={{ fontFamily: V.fontDisplay, fontSize: 13, fontWeight: 800, color: selected ? V.green : V.ink }}>
+                <div style={{ fontFamily: preset.bodyFont, fontSize: 13, fontWeight: 800, color: selected ? V.green : V.ink }}>
                   {preset.label}
                 </div>
                 {selected ? (
@@ -989,7 +991,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
   const hasLinksStrip = Boolean(zl);
   const preset = getNewsletterStylePreset(config.stylePreset);
   const clean = preset.id === "clean";
-  const headerText = clean ? V.navy : V.white;
+  const headerText = clean ? V.navy : V.ink;
   const headerTitleFont = clean ? V.fontDisplay : preset.bodyFont;
   const sectionHeadingStyle = (color) => clean
     ? {
@@ -1037,13 +1039,14 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
       <div
         className="nl-print-header"
         style={{
-          background: clean ? V.card : V.navy,
+          background: V.card,
           padding: "24px 32px",
           color: headerText,
-          borderBottom: clean ? `4px solid ${V.gold}` : "none",
+          borderTop: clean ? "none" : `6px solid ${V.navy}`,
+          borderBottom: clean ? `4px solid ${V.gold}` : `3px solid ${V.navy}`,
         }}
       >
-        <div className="nl-print-header-title" style={{ fontSize: 26, fontWeight: 900, letterSpacing: "0.02em", fontFamily: headerTitleFont }}>{name || "Zone Newsletter"}</div>
+        <div className="nl-print-header-title" style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.02em", fontFamily: headerTitleFont }}>{name || "Zone Newsletter"}</div>
         {tagline && (
           <div className="nl-print-header-tagline" style={{ fontSize: 14, opacity: clean ? 0.82 : 0.92, marginTop: 4 }}>
             {tagline}
@@ -1070,7 +1073,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
             marginTop: 12,
             fontSize: 12,
             opacity: clean ? 0.76 : 0.88,
-            borderTop: clean ? `1px solid ${V.border}` : "1px solid rgba(255,255,255,0.28)",
+            borderTop: clean ? `1px solid ${V.border}` : `1px solid ${V.border}`,
             paddingTop: 10,
           }}
         >
@@ -1161,7 +1164,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
 }
 
 // ── Captain Builder View ───────────────────────────────────────────────────────
-function CaptainView({ newsletterData }) {
+function CaptainView({ newsletterData, currentIssueLoading = false }) {
   const [step, setStep] = useState(0); // 0=config, 1=select, 2=preview
   const [config, setConfig] = useState(DEFAULT_CAPTAIN_CONFIG);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -1335,7 +1338,10 @@ function CaptainView({ newsletterData }) {
 
     htmlParts.push(`<div style="font-family:${preset.emailFontFamily};font-size:14px;line-height:${clean ? "1.5" : "1.55"};color:#1f2937;">`);
     htmlParts.push(
-      `<p style="margin:0 0 6px;"><strong style="font-size:20px;line-height:1.2;">${escapeHtmlPlain(config.name || "Zone Newsletter")}</strong></p>`,
+      `<div style="border-top:4px solid ${clean ? "#f59e0b" : "#314059"};border-bottom:1px solid #d1d5db;padding:12px 0 10px;margin:0 0 14px;">`,
+    );
+    htmlParts.push(
+      `<p style="margin:0 0 6px;"><strong style="font-size:28px;line-height:1.15;">${escapeHtmlPlain(config.name || "Zone Newsletter")}</strong></p>`,
     );
     if (config.tagline) {
       htmlParts.push(`<p style="margin:0 0 10px;color:#374151;">${escapeHtmlPlain(config.tagline)}</p>`);
@@ -1354,6 +1360,7 @@ function CaptainView({ newsletterData }) {
     htmlParts.push(
       `<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;line-height:1.45;">Curated from the <a href="${FULL_NEWSLETTER_URL}" style="color:#4b5563;text-decoration:underline;">Altagether Neighborhood Captain Newsletter</a></p>`,
     );
+    htmlParts.push("</div>");
     const zl = zlPlain;
     if (zl) {
       htmlParts.push(`<p style="margin:0 0 14px;font-size:13px;line-height:1.55;color:#1f2937;">${escapeHtmlPlain(zl)}</p>`);
@@ -1465,6 +1472,17 @@ function CaptainView({ newsletterData }) {
   const customEntryCount = customEntries.filter(e => e.text).length;
   const totalSelected = visibleSelectedCount + customEntryCount;
   const currentPreset = getNewsletterStylePreset(config.stylePreset);
+
+  if (!newsletterData && currentIssueLoading) {
+    return (
+      <div style={{ maxWidth: 500, margin: "80px auto", padding: 32, textAlign: "center" }}>
+        <div style={{ fontSize: 18, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 8 }}>Loading newsletter...</div>
+        <div style={{ fontSize: 14, color: V.muted }}>
+          We're getting the latest Altagether newsletter ready. This can take a few seconds.
+        </div>
+      </div>
+    );
+  }
 
   if (!newsletterData) {
     return (
@@ -1782,6 +1800,7 @@ export default function App() {
   const [mode, setMode] = useState("captain"); // "captain" | "admin"
   /** Issue stored in Supabase / shown to captains */
   const [newsletterData, setNewsletterData] = useState(null);
+  const [currentIssueLoading, setCurrentIssueLoading] = useState(true);
   /** Parsed issue not yet published (admin only) */
   const [unpublishedDraft, setUnpublishedDraft] = useState(null);
 
@@ -1790,24 +1809,28 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch("/api/current-issue");
-        if (cancelled) return;
-        if (response.ok) {
-          const body = await response.json();
-          if (body?.data) {
-            setNewsletterData(body.data);
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(body.data));
-            } catch (_) {}
-            return;
+        try {
+          const response = await fetch("/api/current-issue");
+          if (cancelled) return;
+          if (response.ok) {
+            const body = await response.json();
+            if (body?.data) {
+              setNewsletterData(body.data);
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(body.data));
+              } catch (_) {}
+              return;
+            }
           }
-        }
-      } catch (_) {}
-      if (cancelled) return;
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) setNewsletterData(JSON.parse(saved));
-      } catch (_) {}
+        } catch (_) {}
+        if (cancelled) return;
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) setNewsletterData(JSON.parse(saved));
+        } catch (_) {}
+      } finally {
+        if (!cancelled) setCurrentIssueLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -1909,7 +1932,7 @@ export default function App() {
               onDiscardDraft={() => setUnpublishedDraft(null)}
             />
           )
-          : <CaptainView newsletterData={newsletterData} />
+          : <CaptainView newsletterData={newsletterData} currentIssueLoading={currentIssueLoading} />
         }
       </main>
       <footer style={{ padding: "24px 16px 36px", textAlign: "center" }}>
