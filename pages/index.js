@@ -1519,7 +1519,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
 
       {/* Steps */}
       <div className="nl-step-tabs" role="tablist" aria-label="Newsletter builder steps" style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: `2px solid ${V.border}` }}>
-        {["Configure", "Select Content", "Preview & Print"].map((label, i) => (
+        {["Configure", "Select Content", "Preview & Publish"].map((label, i) => (
           <button
             type="button"
             role="tab"
@@ -1730,7 +1730,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
               {hasNextNewsletterSection ? (
                 <Button onClick={goToNextNewsletterSection}>Next Section ({activeSectionIndex + 2} of {sections.length}) →</Button>
               ) : (
-                <Button onClick={() => setStep(2)}>Preview & Print →</Button>
+                <Button onClick={() => setStep(2)}>Preview & Publish →</Button>
               )}
             </div>
           </div>
@@ -1743,9 +1743,9 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink }}>Preview & Print</div>
-                <div style={{ fontSize: 12, color: V.muted, lineHeight: 1.45 }}>
-                  {totalSelected} items selected in the {currentPreset.shortLabel} style. Copy works best from a computer, where you can paste the finished newsletter into Gmail or Outlook.
+                <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink }}>Preview & Publish</div>
+                <div style={{ fontSize: 13, color: V.muted, lineHeight: 1.5, maxWidth: 680 }}>
+                  {visibleSelectedCount} newsletter {visibleSelectedCount === 1 ? "item" : "items"} selected, plus {customEntryCount} zone-specific {customEntryCount === 1 ? "update" : "updates"}. Now choose a style and get ready to publish. Option 1: click Copy for email, then paste into Gmail, Outlook, or whatever email provider you use. Option 2: click Print / Save PDF to print or download a PDF, then distribute it however you'd like.
                 </div>
               </div>
               <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginLeft: "auto" }}>
