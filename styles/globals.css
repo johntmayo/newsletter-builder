@@ -106,22 +106,22 @@ body {
 }
 
 .nl-app-main {
-  padding: 2rem 1.5rem 4rem;
+  padding: 1.25rem 1.5rem 4rem;
   max-width: 1200px;
   margin: 0 auto;
 }
 
 .nl-issue-strip-wrap {
-  max-width: 1200px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 0.75rem 1.5rem 0;
+  padding: 0.65rem 1.5rem 0;
   box-sizing: border-box;
 }
 
 .nl-captain-intro {
-  max-width: 760px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 1rem 1.1rem;
+  padding: 0.9rem 1rem;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-left: 4px solid var(--accent-gold);
@@ -169,7 +169,7 @@ body {
 }
 
 .nl-step-header {
-  margin-bottom: 1.15rem;
+  margin-bottom: 1rem;
 }
 
 .nl-step-kicker {
@@ -204,7 +204,7 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.15rem;
+  margin-bottom: 0.85rem;
   padding: 0.65rem 0.85rem;
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid var(--border-color);

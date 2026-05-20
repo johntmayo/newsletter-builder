@@ -228,6 +228,72 @@ function customUpdateTextToHtml(text) {
     .join("");
 }
 
+function splitTrailingUrlPunctuation(raw) {
+  let hrefRaw = String(raw || "");
+  let suffix = "";
+  while (hrefRaw && /[.,!?;:]$/.test(hrefRaw)) {
+    suffix = hrefRaw.slice(-1) + suffix;
+    hrefRaw = hrefRaw.slice(0, -1);
+  }
+  return { hrefRaw, suffix };
+}
+
+function parseAutoLinkText(text) {
+  const source = String(text || "");
+  const parts = [];
+  const urlPattern = /\b((?:https?:\/\/|www\.)[^\s<>()]+|[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:\/[^\s<>()]*)?)/gi;
+  let cursor = 0;
+  let match;
+
+  while ((match = urlPattern.exec(source)) !== null) {
+    if (match.index > 0 && source[match.index - 1] === "@") continue;
+    const raw = match[0];
+    const { hrefRaw, suffix } = splitTrailingUrlPunctuation(raw);
+    const href = safeCustomLinkHref(hrefRaw);
+    if (!href) continue;
+    if (match.index > cursor) parts.push({ type: "text", text: source.slice(cursor, match.index) });
+    parts.push({ type: "link", label: hrefRaw, href });
+    if (suffix) parts.push({ type: "text", text: suffix });
+    cursor = match.index + raw.length;
+  }
+
+  if (cursor < source.length) parts.push({ type: "text", text: source.slice(cursor) });
+  return parts.length ? parts : [{ type: "text", text: source }];
+}
+
+function autoLinkTextToHtml(text) {
+  return parseAutoLinkText(text)
+    .map((part) => {
+      if (part.type === "link") {
+        return `<a href="${escapeHtmlAttr(part.href)}" rel="noopener noreferrer" style="color:#283618;text-decoration:underline;font-weight:700;">${escapeHtmlPlain(part.label)}</a>`;
+      }
+      return escapeHtmlPlain(part.text);
+    })
+    .join("");
+}
+
+function AutoLinkedText({ text, color = V.green }) {
+  return (
+    <>
+      {parseAutoLinkText(text).map((part, index) =>
+        part.type === "link" ? (
+          <a
+            key={index}
+            href={part.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color, textDecoration: "underline", fontWeight: 700 }}
+          >
+            {part.label}
+          </a>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 function CustomUpdateText({ text, color = V.green }) {
   return (
     <>
@@ -778,8 +844,8 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
       }}
       style={{
         display: "flex", gap: 12, padding: "12px 14px",
-        background: selected ? sectionColor + "10" : V.inputBg,
-        border: `2px solid ${selected ? sectionColor : V.border}`,
+        background: selected ? sectionColor + "0D" : V.inputBg,
+        border: `2px solid ${selected ? `${sectionColor}99` : V.border}`,
         borderRadius: 8,
         boxShadow: selected ? "none" : V.cardShadow,
         cursor: "pointer",
@@ -790,7 +856,7 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
     >
       <div style={{
         width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
-        border: `2px solid ${selected ? sectionColor : V.muted}`,
+        border: `2px solid ${selected ? `${sectionColor}CC` : V.muted}`,
         background: selected ? sectionColor : "transparent",
         display: "flex", alignItems: "center", justifyContent: "center",
         transition: "all 0.15s",
@@ -1097,7 +1163,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
             color: V.ink,
           }}
         >
-          {zl}
+          <AutoLinkedText text={zl} color={V.green} />
         </div>
       ) : null}
 
@@ -1363,7 +1429,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
     htmlParts.push("</div>");
     const zl = zlPlain;
     if (zl) {
-      htmlParts.push(`<p style="margin:0 0 14px;font-size:13px;line-height:1.55;color:#1f2937;">${escapeHtmlPlain(zl)}</p>`);
+      htmlParts.push(`<p style="margin:0 0 14px;font-size:13px;line-height:1.55;color:#1f2937;">${autoLinkTextToHtml(zl)}</p>`);
     }
     htmlParts.push(`<hr style="border:none;border-top:${clean ? "2px solid #f59e0b" : "1px solid #ddd"};margin:12px 0;" />`);
 
@@ -1518,7 +1584,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
       />
 
       {/* Steps */}
-      <div className="nl-step-tabs" role="tablist" aria-label="Newsletter builder steps" style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: `2px solid ${V.border}` }}>
+      <div className="nl-step-tabs" role="tablist" aria-label="Newsletter builder steps" style={{ display: "flex", gap: 0, marginBottom: 18, borderBottom: `1px solid ${V.border}` }}>
         {["Configure", "Select Content", "Preview & Publish"].map((label, i) => (
           <button
             type="button"
@@ -1527,14 +1593,14 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
             key={i}
             onClick={() => setStep(i)}
             style={{
-              padding: "12px 24px", fontSize: 13, fontWeight: i === step ? 800 : 500,
-              color: i === step ? V.ink : V.muted, borderBottom: i === step ? `3px solid ${V.gold}` : "3px solid transparent",
+              padding: "10px 20px", fontSize: 13, fontWeight: i === step ? 900 : 500,
+              color: i === step ? V.ink : V.muted, borderBottom: i === step ? `4px solid ${V.gold}` : "4px solid transparent",
               cursor: "pointer", fontFamily: V.fontDisplay, letterSpacing: "0.03em",
               marginBottom: -2, transition: "all 0.15s",
               borderTop: "none",
               borderLeft: "none",
               borderRight: "none",
-              background: "transparent",
+              background: i === step ? "rgba(245, 158, 11, 0.08)" : "transparent",
             }}
           >
             <span style={{ opacity: 0.5, marginRight: 6 }}>{i + 1}.</span>{label}
@@ -1547,7 +1613,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
 
       {/* Step 0: Configure */}
       {step === 0 && (
-        <div style={{ maxWidth: 680, margin: "0 auto" }}>
+        <>
           <div className="nl-step-header">
             <div className="nl-step-kicker">Step 1 of 3</div>
             <h2 className="nl-step-title">Set up your newsletter</h2>
@@ -1556,89 +1622,91 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
             </p>
           </div>
 
-          {[
-            { field: "name", label: "Newsletter Name", placeholder: "e.g. Zone 4 Neighbor Update" },
-            { field: "tagline", label: "Tagline (optional)", placeholder: "e.g. News for Loma Alta neighbors" },
-            { field: "issueDate", label: "Newsletter Date (optional)", placeholder: "e.g. Wednesday, May 6, 2026" },
-            { field: "zone", label: "Zone / Neighborhood", placeholder: "e.g. Zone 4 — Loma Alta" },
-          ].map(({ field, label, placeholder }) => (
-            <div key={field} style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
+          <div style={{ maxWidth: 680, margin: "0 auto" }}>
+            {[
+              { field: "name", label: "Newsletter Name", placeholder: "e.g. Zone 4 Neighbor Update" },
+              { field: "tagline", label: "Tagline (optional)", placeholder: "e.g. News for Loma Alta neighbors" },
+              { field: "issueDate", label: "Newsletter Date (optional)", placeholder: "e.g. Wednesday, May 6, 2026" },
+              { field: "zone", label: "Zone / Neighborhood", placeholder: "e.g. Zone 4 — Loma Alta" },
+            ].map(({ field, label, placeholder }) => (
+              <div key={field} style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</label>
+                <input
+                  value={config[field]} onChange={e => updateConfig(field, e.target.value)}
+                  placeholder={placeholder}
+                  style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
+                />
+              </div>
+            ))}
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 10, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Captains (optional)
+              </div>
+              {config.captains.map((c, idx) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 10,
+                    alignItems: "flex-end",
+                    marginBottom: 10,
+                    paddingBottom: 10,
+                    borderBottom: idx < config.captains.length - 1 ? `1px solid ${V.border}` : "none",
+                  }}
+                >
+                  <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, fontFamily: V.fontDisplay, color: V.muted, marginBottom: 4, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                      Captain
+                    </label>
+                    <input
+                      value={c.name}
+                      onChange={(e) => setCaptainField(c.id, "name", e.target.value)}
+                      placeholder="Name"
+                      style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                    <label style={{ display: "block", fontSize: 11, fontWeight: 700, fontFamily: V.fontDisplay, color: V.muted, marginBottom: 4, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                      How to contact
+                    </label>
+                    <input
+                      value={c.contact}
+                      onChange={(e) => setCaptainField(c.id, "contact", e.target.value)}
+                      placeholder="Phone, email, etc."
+                      style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
+                    />
+                  </div>
+                  {config.captains.length > 1 ? (
+                    <Button variant="danger" type="button" onClick={() => removeCaptain(c.id)} style={{ fontSize: 11, padding: "8px 12px", flex: "0 0 auto" }}>
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+              <Button variant="ghost" type="button" onClick={addCaptain} style={{ width: "100%", padding: "9px", fontSize: 12 }}>
+                + Add a captain
+              </Button>
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                Website, Facebook, WhatsApp, etc. (optional)
+              </label>
               <input
-                value={config[field]} onChange={e => updateConfig(field, e.target.value)}
-                placeholder={placeholder}
+                value={config.zoneLinks}
+                onChange={(e) => updateConfig("zoneLinks", e.target.value)}
+                placeholder="e.g. Zone website, Facebook group, WhatsApp channel — if any"
                 style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
               />
             </div>
-          ))}
 
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 10, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Captains (optional)
-            </div>
-            {config.captains.map((c, idx) => (
-              <div
-                key={c.id}
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 10,
-                  alignItems: "flex-end",
-                  marginBottom: 10,
-                  paddingBottom: 10,
-                  borderBottom: idx < config.captains.length - 1 ? `1px solid ${V.border}` : "none",
-                }}
-              >
-                <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, fontFamily: V.fontDisplay, color: V.muted, marginBottom: 4, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                    Captain
-                  </label>
-                  <input
-                    value={c.name}
-                    onChange={(e) => setCaptainField(c.id, "name", e.target.value)}
-                    placeholder="Name"
-                    style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
-                  />
-                </div>
-                <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, fontFamily: V.fontDisplay, color: V.muted, marginBottom: 4, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                    How to contact
-                  </label>
-                  <input
-                    value={c.contact}
-                    onChange={(e) => setCaptainField(c.id, "contact", e.target.value)}
-                    placeholder="Phone, email, etc."
-                    style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
-                  />
-                </div>
-                {config.captains.length > 1 ? (
-                  <Button variant="danger" type="button" onClick={() => removeCaptain(c.id)} style={{ fontSize: 11, padding: "8px 12px", flex: "0 0 auto" }}>
-                    Remove
-                  </Button>
-                ) : null}
-              </div>
-            ))}
-            <Button variant="ghost" type="button" onClick={addCaptain} style={{ width: "100%", padding: "9px", fontSize: 12 }}>
-              + Add a captain
+            <Button onClick={() => setStep(1)} style={{ width: "100%" }}>
+              Next: Select Content →
             </Button>
           </div>
-
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Website, Facebook, WhatsApp, etc. (optional)
-            </label>
-            <input
-              value={config.zoneLinks}
-              onChange={(e) => updateConfig("zoneLinks", e.target.value)}
-              placeholder="e.g. Zone website, Facebook group, WhatsApp channel — if any"
-              style={{ width: "100%", padding: "10px 14px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 14, fontFamily: V.fontBody, background: V.inputBg, boxSizing: "border-box" }}
-            />
-          </div>
-
-          <Button onClick={() => setStep(1)} style={{ width: "100%" }}>
-            Next: Select Content →
-          </Button>
-        </div>
+        </>
       )}
 
       {/* Step 1: Select */}
