@@ -1745,7 +1745,17 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink }}>Preview & Publish</div>
                 <div style={{ fontSize: 13, color: V.muted, lineHeight: 1.5, maxWidth: 680 }}>
-                  {visibleSelectedCount} newsletter {visibleSelectedCount === 1 ? "item" : "items"} selected, plus {customEntryCount} zone-specific {customEntryCount === 1 ? "update" : "updates"}. Now choose a style and get ready to publish. Option 1: click Copy for email, then paste into Gmail, Outlook, or whatever email provider you use. Option 2: click Print / Save PDF to print or download a PDF, then distribute it however you'd like.
+                  <div>
+                    {visibleSelectedCount} newsletter {visibleSelectedCount === 1 ? "item" : "items"} selected, plus {customEntryCount} zone-specific {customEntryCount === 1 ? "update" : "updates"}. Now choose a style and get ready to publish.
+                  </div>
+                  <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                    <div style={{ padding: "8px 10px", background: V.greenTint08, border: `1px solid ${V.greenTint15}`, borderRadius: 6, color: V.ink }}>
+                      <strong>Option 1:</strong> Click Copy for email, then paste into Gmail, Outlook, or whatever email provider you use.
+                    </div>
+                    <div style={{ padding: "8px 10px", background: "rgba(188, 88, 56, 0.08)", border: `1px solid ${V.clayTint}`, borderRadius: 6, color: V.ink }}>
+                      <strong>Option 2:</strong> Click Print / Save PDF to print or download a PDF, then distribute it however you'd like.
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginLeft: "auto" }}>
