@@ -118,6 +118,73 @@ body {
   box-sizing: border-box;
 }
 
+.nl-captain-intro {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1rem 1.1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--accent-gold);
+  border-radius: 8px;
+}
+
+.nl-captain-intro__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+  align-items: center;
+  margin-bottom: 0.55rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.nl-captain-intro__kicker,
+.nl-step-kicker {
+  font-family: var(--font-chivo);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nl-captain-intro__title,
+.nl-step-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-chivo);
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.nl-captain-intro__title {
+  font-size: 1.15rem;
+}
+
+.nl-captain-intro__body,
+.nl-step-copy {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.nl-step-header {
+  margin-bottom: 1.15rem;
+}
+
+.nl-step-kicker {
+  margin-bottom: 0.35rem;
+  color: var(--accent-gold);
+}
+
+.nl-step-title {
+  font-size: 1.45rem;
+}
+
+.nl-step-copy {
+  max-width: 44rem;
+}
+
 .nl-step-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -137,13 +204,11 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1rem;
-  padding: 0.85rem 1rem;
-  background: var(--bg-card);
-  border: 2px solid var(--border-color);
-  border-left: 4px solid var(--accent-gold);
+  margin-bottom: 1.15rem;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: var(--nl-card-shadow);
 }
 
 .nl-style-grid {

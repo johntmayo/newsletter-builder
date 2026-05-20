@@ -972,11 +972,11 @@ function BuilderStatus({ config, preset, visibleSelectedCount, customEntryCount,
           {title}
         </div>
         <div style={{ marginTop: 2, color: V.muted, fontSize: 12 }}>
-          {preset.shortLabel} style · {visibleSelectedCount} newsletter items · {customEntryCount} zone updates
+          {visibleSelectedCount} newsletter {visibleSelectedCount === 1 ? "item" : "items"} selected · {customEntryCount} zone {customEntryCount === 1 ? "update" : "updates"} · {preset.shortLabel} style
         </div>
       </div>
       <div style={{ color: draftNotice ? V.green : V.muted, fontSize: 12, lineHeight: 1.45 }}>
-        {draftNotice || (totalSelected > 0 ? "Your draft is saved in this browser." : "Drafts save automatically in this browser.")}
+        {draftNotice || (totalSelected > 0 ? "Saved in this browser." : "Autosaves in this browser.")}
       </div>
     </div>
   );
@@ -1548,8 +1548,13 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
       {/* Step 0: Configure */}
       {step === 0 && (
         <div style={{ maxWidth: 680, margin: "0 auto" }}>
-          <div style={{ fontSize: 18, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 4 }}>Configure Your Newsletter</div>
-          <div style={{ fontSize: 13, color: V.muted, marginBottom: 24 }}>Set up the basics for your zone's version of the newsletter.</div>
+          <div className="nl-step-header">
+            <div className="nl-step-kicker">Step 1 of 3</div>
+            <h2 className="nl-step-title">Set up your newsletter</h2>
+            <p className="nl-step-copy">
+              Add the title, date, and contact details that should appear at the top of your neighborhood version.
+            </p>
+          </div>
 
           {[
             { field: "name", label: "Newsletter Name", placeholder: "e.g. Zone 4 Neighbor Update" },
@@ -1638,134 +1643,135 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
 
       {/* Step 1: Select */}
       {step === 1 && (
-        <div className="nl-captain-grid">
-          {/* Section nav */}
-          <div className="nl-section-rail" style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, overflow: "hidden", alignSelf: "start", position: "sticky", top: 20 }}>
-            <div style={{ padding: "12px 16px", background: V.border, fontSize: 11, fontWeight: 800, fontFamily: V.fontDisplay, color: V.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Sections</div>
-            {sections.map(sec => {
-              const color = getSectionColor(sec.heading);
-              const count = captainVisibleItems(sec.items).filter((i) => selectedIds.has(i.id)).length;
-              return (
-                <button
-                  type="button"
-                  key={sec.id}
-                  onClick={() => setActiveSection(sec.id)}
-                  style={{
-                    padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
-                    background: activeSection === sec.id ? color + "15" : "transparent",
-                    borderLeft: `3px solid ${activeSection === sec.id ? color : "transparent"}`,
-                    transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "space-between",
-                    color: activeSection === sec.id ? color : V.ink,
-                    width: "100%",
-                    borderTop: "none",
-                    borderRight: "none",
-                    borderBottom: "none",
-                    textAlign: "left",
-                  }}
-                >
-                  <span style={{ fontWeight: activeSection === sec.id ? 700 : 400 }}>{sec.heading}</span>
-                  {count > 0 && (
-                    <span style={{ background: color, color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10, fontWeight: 800 }}>{count}</span>
-                  )}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setActiveSection("custom")}
-              style={{
-                padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
-                background: activeSection === "custom" ? V.clayTint : "transparent",
-                borderLeft: `3px solid ${activeSection === "custom" ? V.clay : "transparent"}`,
-                color: activeSection === "custom" ? V.clay : V.ink, fontWeight: activeSection === "custom" ? 700 : 400,
-                borderTop: `1px solid ${V.border}`, marginTop: 4,
-                borderRight: "none",
-                borderBottom: "none",
-                width: "100%",
-                textAlign: "left",
-              }}
-            >
-              + Zone Updates
-            </button>
+        <>
+          <div className="nl-step-header">
+            <div className="nl-step-kicker">Step 2 of 3</div>
+            <h2 className="nl-step-title">Choose updates for your neighborhood</h2>
+            <p className="nl-step-copy">
+              Click any card to include it. Use the section list to move through the newsletter, then add your own zone updates if needed.
+            </p>
           </div>
-
-          {/* Items panel */}
-          <div>
-            <div style={{ fontSize: 13, color: V.muted, marginBottom: 16, lineHeight: 1.55 }}>
-              <strong style={{ color: V.ink }}>{sectionProgressLabel}.</strong>{" "}
-              Select the newsletter items that are most relevant to your neighbors. You can also add your own zone-specific updates; those will appear first in your finished newsletter.
+          <div className="nl-captain-grid">
+            {/* Section nav */}
+            <div className="nl-section-rail" style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, overflow: "hidden", alignSelf: "start", position: "sticky", top: 20 }}>
+              <div style={{ padding: "12px 16px", background: V.border, fontSize: 11, fontWeight: 800, fontFamily: V.fontDisplay, color: V.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Sections</div>
+              {sections.map(sec => {
+                const color = getSectionColor(sec.heading);
+                const count = captainVisibleItems(sec.items).filter((i) => selectedIds.has(i.id)).length;
+                return (
+                  <button
+                    type="button"
+                    key={sec.id}
+                    onClick={() => setActiveSection(sec.id)}
+                    style={{
+                      padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
+                      background: activeSection === sec.id ? color + "15" : "transparent",
+                      borderLeft: `3px solid ${activeSection === sec.id ? color : "transparent"}`,
+                      transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "space-between",
+                      color: activeSection === sec.id ? color : V.ink,
+                      width: "100%",
+                      borderTop: "none",
+                      borderRight: "none",
+                      borderBottom: "none",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span style={{ fontWeight: activeSection === sec.id ? 700 : 400 }}>{sec.heading}</span>
+                    {count > 0 && (
+                      <span style={{ background: color, color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10, fontWeight: 800 }}>{count}</span>
+                    )}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setActiveSection("custom")}
+                style={{
+                  padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
+                  background: activeSection === "custom" ? V.clayTint : "transparent",
+                  borderLeft: `3px solid ${activeSection === "custom" ? V.clay : "transparent"}`,
+                  color: activeSection === "custom" ? V.clay : V.ink, fontWeight: activeSection === "custom" ? 700 : 400,
+                  borderTop: `1px solid ${V.border}`, marginTop: 4,
+                  borderRight: "none",
+                  borderBottom: "none",
+                  width: "100%",
+                  textAlign: "left",
+                }}
+              >
+                + Zone Updates
+              </button>
             </div>
-            {activeSection === "custom" ? (
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, marginBottom: 4 }}>Zone-Specific Updates</div>
-                <div style={{ fontSize: 13, color: V.muted, marginBottom: 16 }}>Add your own neighborhood news, announcements, or reminders. These will appear as the top stories in your newsletter.</div>
-                <CustomEntryEditor entries={customEntries} onChange={setCustomEntries} />
+
+            {/* Items panel */}
+            <div>
+              <div style={{ fontSize: 13, color: V.muted, marginBottom: 16, lineHeight: 1.55 }}>
+                <strong style={{ color: V.ink }}>{sectionProgressLabel}.</strong>{" "}
+                Pick the items your neighbors need most.
               </div>
-            ) : (() => {
-              const sec = sections.find(s => s.id === activeSection);
-              if (!sec) return null;
-              const color = getSectionColor(sec.heading);
-              const vis = captainVisibleItems(sec.items);
-              const allSelected = vis.length > 0 && vis.every((i) => selectedIds.has(i.id));
-              return (
+              {activeSection === "custom" ? (
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color }}>{sec.heading}</div>
-                      <div style={{ fontSize: 12, color: V.muted }}>{vis.length} items • {vis.filter((i) => selectedIds.has(i.id)).length} selected</div>
-                    </div>
-                    <Button variant="ghost" onClick={() => toggleSection(sec)} style={{ fontSize: 11, padding: "6px 14px", borderColor: color, color }}>
-                      {allSelected ? "Deselect All" : "Select All"}
-                    </Button>
-                  </div>
-                  {vis.map(item => (
-                    <ItemCard key={item.id} item={item} selected={selectedIds.has(item.id)} onToggle={() => toggleItem(item.id)} sectionColor={color} />
-                  ))}
+                  <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, marginBottom: 4 }}>Zone updates</div>
+                  <div style={{ fontSize: 13, color: V.muted, marginBottom: 16 }}>Add local announcements or reminders. These will appear first in your finished newsletter.</div>
+                  <CustomEntryEditor entries={customEntries} onChange={setCustomEntries} />
                 </div>
-              );
-            })()}
+              ) : (() => {
+                const sec = sections.find(s => s.id === activeSection);
+                if (!sec) return null;
+                const color = getSectionColor(sec.heading);
+                const vis = captainVisibleItems(sec.items);
+                const allSelected = vis.length > 0 && vis.every((i) => selectedIds.has(i.id));
+                return (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color }}>{sec.heading}</div>
+                        <div style={{ fontSize: 12, color: V.muted }}>{vis.length} items • {vis.filter((i) => selectedIds.has(i.id)).length} selected</div>
+                      </div>
+                      <Button variant="ghost" onClick={() => toggleSection(sec)} style={{ fontSize: 11, padding: "6px 14px", borderColor: color, color }}>
+                        {allSelected ? "Deselect All" : "Select All"}
+                      </Button>
+                    </div>
+                    {vis.map(item => (
+                      <ItemCard key={item.id} item={item} selected={selectedIds.has(item.id)} onToggle={() => toggleItem(item.id)} sectionColor={color} />
+                    ))}
+                  </div>
+                );
+              })()}
 
-            <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginTop: 24, paddingTop: 16, borderTop: `1px solid ${V.border}` }}>
-              <Button variant="secondary" onClick={() => setStep(0)}>← Back</Button>
-              {hasNextNewsletterSection ? (
-                <Button onClick={goToNextNewsletterSection}>Next Section ({activeSectionIndex + 2} of {sections.length}) →</Button>
-              ) : (
-                <Button onClick={() => setStep(2)}>Preview & Publish →</Button>
-              )}
+              <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginTop: 24, paddingTop: 16, borderTop: `1px solid ${V.border}` }}>
+                <Button variant="secondary" onClick={() => setStep(0)}>← Back</Button>
+                {hasNextNewsletterSection ? (
+                  <Button onClick={goToNextNewsletterSection}>Next Section ({activeSectionIndex + 2} of {sections.length}) →</Button>
+                ) : (
+                  <Button onClick={() => setStep(2)}>Preview & Publish →</Button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Step 2: Preview */}
       {step === 2 && (
         <div>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.ink }}>Preview & Publish</div>
-                <div style={{ fontSize: 13, color: V.muted, lineHeight: 1.5, maxWidth: 680 }}>
-                  <div>
-                    {visibleSelectedCount} newsletter {visibleSelectedCount === 1 ? "item" : "items"} selected, plus {customEntryCount} zone-specific {customEntryCount === 1 ? "update" : "updates"}. Now choose a style and get ready to publish.
-                  </div>
-                  <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                    <div style={{ padding: "8px 10px", background: V.greenTint08, border: `1px solid ${V.greenTint15}`, borderRadius: 6, color: V.ink }}>
-                      <strong>Option 1:</strong> Click Copy for email, then paste into Gmail, Outlook, or whatever email provider you use.
-                    </div>
-                    <div style={{ padding: "8px 10px", background: "rgba(188, 88, 56, 0.08)", border: `1px solid ${V.clayTint}`, borderRadius: 6, color: V.ink }}>
-                      <strong>Option 2:</strong> Click Print / Save PDF to print or download a PDF, then distribute it however you'd like.
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginLeft: "auto" }}>
-                <Button variant="secondary" onClick={() => setStep(1)}>← Edit</Button>
-                <Button variant="secondary" onClick={handleCopyForEmail}>Copy for email</Button>
-                <Button onClick={handlePrint}>Print / Save PDF</Button>
+          <div className="nl-step-header" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+            <div>
+              <div className="nl-step-kicker">Step 3 of 3</div>
+              <h2 className="nl-step-title">Preview and share</h2>
+              <p className="nl-step-copy">
+                Review your newsletter, choose a style, then copy it into email or save it as a PDF.
+              </p>
+              <div style={{ marginTop: 8, color: V.muted, fontSize: 12 }}>
+                {visibleSelectedCount} newsletter {visibleSelectedCount === 1 ? "item" : "items"} selected · {customEntryCount} zone {customEntryCount === 1 ? "update" : "updates"} added
               </div>
             </div>
+            <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginLeft: "auto" }}>
+              <Button variant="secondary" onClick={() => setStep(1)}>← Edit</Button>
+              <Button onClick={handleCopyForEmail}>Copy for email</Button>
+              <Button variant="secondary" onClick={handlePrint}>Print / Save PDF</Button>
+            </div>
             {copyStatus && (
-              <div style={{ marginTop: 10, fontSize: 12, color: V.green, fontFamily: V.fontBody }}>{copyStatus}</div>
+              <div style={{ flexBasis: "100%", fontSize: 12, color: V.green, fontFamily: V.fontBody }}>{copyStatus}</div>
             )}
           </div>
 
@@ -1879,56 +1885,56 @@ export default function App() {
       >
         <Logo
           onDark
-          subtitle="Create your own neighborhood newsletter by choosing items from the latest Altagether Newsletter and adding your own zone-specific updates."
+          subtitle="Build a short neighborhood version of the latest Altagether newsletter."
         />
       </header>
 
       {newsletterData && (
         <div className="nl-issue-strip-wrap">
-          <div
-            style={{
-              background: V.card,
-              border: `2px solid ${V.border}`,
-              borderRadius: 8,
-              boxShadow: V.cardShadow,
-              borderLeft: `4px solid ${V.gold}`,
-              padding: "10px 16px",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={{ fontSize: 11, color: V.muted, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, fontFamily: V.fontDisplay }}>
-              Current Issue
-            </span>
-            <span style={{ fontSize: 13, color: V.ink, fontFamily: V.fontBody, fontWeight: 700 }}>{newsletterData.title}</span>
-            <span style={{ fontSize: 12, color: V.muted }}>• {newsletterData.date}</span>
-            {newsletterData.nextIssue && (
-              <span style={{ fontSize: 12, color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>• Next: {newsletterData.nextIssue}</span>
-            )}
-          </div>
           {mode === "captain" ? (
+            <div className="nl-captain-intro">
+              <div className="nl-captain-intro__meta">
+                <span className="nl-captain-intro__kicker">Current issue</span>
+                <span style={{ color: V.ink, fontWeight: 700 }}>{newsletterData.title}</span>
+                <span>{newsletterData.date}</span>
+                {newsletterData.nextIssue && (
+                  <span style={{ color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>Next: {newsletterData.nextIssue}</span>
+                )}
+              </div>
+              <h2 className="nl-captain-intro__title">Build a short version for your neighbors</h2>
+              <p className="nl-captain-intro__body">
+                Start with the latest Altagether Neighborhood Captain Newsletter, choose the updates your neighbors need most, then copy or print your finished version. You can read the{" "}
+                <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: V.green, fontWeight: 700 }}>
+                  full newsletter here
+                </a>
+                .
+              </p>
+            </div>
+          ) : (
             <div
               style={{
-                marginTop: 10,
                 background: V.card,
-                border: `1px solid ${V.border}`,
+                border: `2px solid ${V.border}`,
                 borderRadius: 8,
-                padding: "12px 16px",
-                color: V.ink,
-                fontFamily: V.fontBody,
-                fontSize: 13,
-                lineHeight: 1.6,
+                boxShadow: V.cardShadow,
+                borderLeft: `4px solid ${V.gold}`,
+                padding: "10px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
               }}
             >
-              Everything here comes from the latest issue of the Altagether Neighborhood Captain Newsletter. You can read the{" "}
-              <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: V.green, fontWeight: 700 }}>
-                full newsletter here
-              </a>
-              . Choose the items most relevant to your neighbors, then add your own local updates if you'd like. Your updates will appear as the top stories in your newsletter.
+              <span style={{ fontSize: 11, color: V.muted, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, fontFamily: V.fontDisplay }}>
+                Current Issue
+              </span>
+              <span style={{ fontSize: 13, color: V.ink, fontFamily: V.fontBody, fontWeight: 700 }}>{newsletterData.title}</span>
+              <span style={{ fontSize: 12, color: V.muted }}>• {newsletterData.date}</span>
+              {newsletterData.nextIssue && (
+                <span style={{ fontSize: 12, color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>• Next: {newsletterData.nextIssue}</span>
+              )}
             </div>
-          ) : null}
+          )}
         </div>
       )}
 
