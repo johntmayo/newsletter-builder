@@ -150,6 +150,45 @@ function metadataText(value) {
   return "";
 }
 
+function normalizeNewsletterIssueData(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return data;
+  return {
+    ...data,
+    title: metadataText(data.title) || "Neighborhood Captain Newsletter",
+    date: metadataText(data.date),
+    nextIssue: metadataText(data.nextIssue) || null,
+    deadline: metadataText(data.deadline) || null,
+    submissionEmail: metadataText(data.submissionEmail) || null,
+    sections: Array.isArray(data.sections)
+      ? data.sections.map((section, sIdx) => ({
+          ...section,
+          id: metadataText(section?.id) || `s${sIdx + 1}`,
+          heading: metadataText(section?.heading) || "Other",
+          items: Array.isArray(section?.items)
+            ? section.items.map((item, iIdx) => ({
+                ...item,
+                id: metadataText(item?.id) || `s${sIdx + 1}i${iIdx + 1}`,
+                type: metadataText(item?.type) || "text",
+                text: metadataText(item?.text),
+                bodyHtml: typeof item?.bodyHtml === "string" ? item.bodyHtml : null,
+                date: metadataText(item?.date) || null,
+                time: metadataText(item?.time) || null,
+                location: metadataText(item?.location) || null,
+                links: Array.isArray(item?.links)
+                  ? item.links
+                      .map((link) => ({
+                        label: metadataText(link?.label),
+                        url: metadataText(link?.url),
+                      }))
+                      .filter((link) => link.label || link.url)
+                  : [],
+              }))
+            : [],
+        }))
+      : [],
+  };
+}
+
 function formatNextIssueDate(nextIssue, currentIssueDate) {
   const next = metadataText(nextIssue).trim();
   if (!next || /\b\d{4}\b/.test(next)) return next;
@@ -631,7 +670,7 @@ function AdminView({
     try {
       const html = await fileToUtf8Text(file);
       setStatus("Parsing newsletter…");
-      const parsed = await parseNewsletterHtmlUpload(html);
+      const parsed = normalizeNewsletterIssueData(await parseNewsletterHtmlUpload(html));
       parsed._uploadedAt = new Date().toISOString();
 
       onAdminIssueUpdate(parsed, { draftOnly: true });
@@ -658,14 +697,15 @@ function AdminView({
     setPublishLoading(true);
     setStatus("");
     try {
+      const issueToPublish = normalizeNewsletterIssueData(unpublishedDraft);
       const pub = await fetch("/api/publish-newsletter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pw, parsed: unpublishedDraft }),
+        body: JSON.stringify({ password: pw, parsed: issueToPublish }),
       });
       const pubBody = await pub.json().catch(() => ({}));
 
-      const linkCount = (unpublishedDraft.sections || []).reduce(
+      const linkCount = (issueToPublish.sections || []).reduce(
         (n, sec) =>
           n + (sec.items || []).reduce((m, it) => m + (it.links?.length || 0), 0),
         0,
@@ -678,9 +718,9 @@ function AdminView({
         return;
       }
 
-      onAdminIssueUpdate(unpublishedDraft);
+      onAdminIssueUpdate(issueToPublish);
       setStatus(
-        `✓ Published for all visitors! ${unpublishedDraft.sections?.length || 0} sections, ${linkCount} links live.`,
+        `✓ Published for all visitors! ${issueToPublish.sections?.length || 0} sections, ${linkCount} links live.`,
       );
     } catch (e) {
       setStatus(`Error: ${e.message}`);
@@ -1919,9 +1959,10 @@ export default function App() {
           if (response.ok) {
             const body = await response.json();
             if (body?.data) {
-              setNewsletterData(body.data);
+              const normalized = normalizeNewsletterIssueData(body.data);
+              setNewsletterData(normalized);
               try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(body.data));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
               } catch (_) {}
               return;
             }
@@ -1930,7 +1971,7 @@ export default function App() {
         if (cancelled) return;
         try {
           const saved = localStorage.getItem(STORAGE_KEY);
-          if (saved) setNewsletterData(JSON.parse(saved));
+          if (saved) setNewsletterData(normalizeNewsletterIssueData(JSON.parse(saved)));
         } catch (_) {}
       } finally {
         if (!cancelled) setCurrentIssueLoading(false);
@@ -1942,14 +1983,15 @@ export default function App() {
   }, []);
 
   function handleAdminIssueUpdate(data, meta) {
+    const normalized = normalizeNewsletterIssueData(data);
     if (meta?.draftOnly) {
-      setUnpublishedDraft(data);
+      setUnpublishedDraft(normalized);
       return;
     }
-    setNewsletterData(data);
+    setNewsletterData(normalized);
     setUnpublishedDraft(null);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
     } catch (_) {}
   }
 
