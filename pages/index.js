@@ -137,10 +137,23 @@ function formatDisplayDate(date) {
   }).format(date);
 }
 
+function metadataText(value) {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    for (const key of ["text", "date", "label", "title", "value"]) {
+      if (value[key] != null) return metadataText(value[key]);
+    }
+  }
+  return "";
+}
+
 function formatNextIssueDate(nextIssue, currentIssueDate) {
-  const next = String(nextIssue || "").trim();
+  const next = metadataText(nextIssue).trim();
   if (!next || /\b\d{4}\b/.test(next)) return next;
-  const year = String(currentIssueDate || "").match(/\b\d{4}\b/)?.[0];
+  const year = metadataText(currentIssueDate).match(/\b\d{4}\b/)?.[0];
   return year ? `${next}, ${year}` : next;
 }
 
@@ -775,7 +788,7 @@ function AdminView({
                 fontFamily: V.fontBody,
               }}
             >
-              <strong>Unpublished draft:</strong> {unpublishedDraft.title || "Untitled"} — {unpublishedDraft.date || "No date"}
+              <strong>Unpublished draft:</strong> {metadataText(unpublishedDraft.title) || "Untitled"} — {metadataText(unpublishedDraft.date) || "No date"}
               <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10 }}>
                 <Button onClick={handlePublishForEveryone} disabled={publishLoading}>
                   {publishLoading ? "Publishing…" : "Publish for all visitors"}
@@ -815,7 +828,7 @@ function AdminView({
 
           {publishedIssue && (
             <div style={{ marginTop: 24, padding: "12px 16px", background: V.border, borderRadius: 6, fontSize: 12, color: V.muted }}>
-              <strong>Live issue (what captains see now):</strong> {publishedIssue.title} — {publishedIssue.date}<br />
+              <strong>Live issue (what captains see now):</strong> {metadataText(publishedIssue.title)} — {metadataText(publishedIssue.date)}<br />
               Published: {publishedIssue._uploadedAt ? new Date(publishedIssue._uploadedAt).toLocaleDateString() : "Unknown"}
             </div>
           )}
@@ -1940,6 +1953,10 @@ export default function App() {
     } catch (_) {}
   }
 
+  const currentIssueTitle = metadataText(newsletterData?.title);
+  const currentIssueDate = metadataText(newsletterData?.date);
+  const currentIssueNext = metadataText(newsletterData?.nextIssue);
+
   return (
     <div style={{ minHeight: "100vh", background: V.paper, fontFamily: V.fontBody }}>
       <header
@@ -1971,10 +1988,10 @@ export default function App() {
               <div className="nl-captain-intro__meta">
                 <span className="nl-captain-intro__kicker">Current issue:</span>
                 <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: V.green, fontWeight: 700 }}>
-                  {newsletterData.date}
+                  {currentIssueDate}
                 </a>
-                {newsletterData.nextIssue && (
-                  <span style={{ color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>Next: {formatNextIssueDate(newsletterData.nextIssue, newsletterData.date)}</span>
+                {currentIssueNext && (
+                  <span style={{ color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>Next: {formatNextIssueDate(currentIssueNext, currentIssueDate)}</span>
                 )}
               </div>
               <h2 className="nl-captain-intro__title">Help your neighbors stay informed.</h2>
@@ -2000,10 +2017,10 @@ export default function App() {
               <span style={{ fontSize: 11, color: V.muted, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, fontFamily: V.fontDisplay }}>
                 Current Issue
               </span>
-              <span style={{ fontSize: 13, color: V.ink, fontFamily: V.fontBody, fontWeight: 700 }}>{newsletterData.title}</span>
-              <span style={{ fontSize: 12, color: V.muted }}>• {newsletterData.date}</span>
-              {newsletterData.nextIssue && (
-                <span style={{ fontSize: 12, color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>• Next: {newsletterData.nextIssue}</span>
+              <span style={{ fontSize: 13, color: V.ink, fontFamily: V.fontBody, fontWeight: 700 }}>{currentIssueTitle}</span>
+              <span style={{ fontSize: 12, color: V.muted }}>• {currentIssueDate}</span>
+              {currentIssueNext && (
+                <span style={{ fontSize: 12, color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>• Next: {formatNextIssueDate(currentIssueNext, currentIssueDate)}</span>
               )}
             </div>
           )}
