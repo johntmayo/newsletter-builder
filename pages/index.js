@@ -122,8 +122,9 @@ function fileToUtf8Text(file) {
 }
 
 function getSectionColor(heading) {
+  const headingText = metadataText(heading).toLowerCase();
   for (const [key, color] of Object.entries(SECTION_COLORS)) {
-    if (heading?.toLowerCase().includes(key.toLowerCase())) return color;
+    if (headingText.includes(key.toLowerCase())) return color;
   }
   return SECTION_COLORS.Other;
 }
@@ -449,13 +450,13 @@ function NewsletterItemBody({ item, sectionColor, appendixLinks, bodyFont = V.fo
   }
   return (
     <>
-      <div style={{ fontSize: "0.9rem", lineHeight, fontFamily: bodyFont }}>{item.text}</div>
+      <div style={{ fontSize: "0.9rem", lineHeight, fontFamily: bodyFont }}>{metadataText(item.text)}</div>
       {appendixLinks && item.links?.length > 0 && (
         <div style={{ marginTop: 4 }}>
           {item.links.map((l, i) => (
             <span key={i} style={{ fontSize: 11, color: sectionColor, marginRight: 8, display: "inline-block" }}>
-              → {l.label}
-              {l.url ? ` (${l.url})` : ""}
+              → {metadataText(l.label)}
+              {metadataText(l.url) ? ` (${metadataText(l.url)})` : ""}
             </span>
           ))}
         </div>
@@ -926,7 +927,7 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         {item.date && (
           <div style={{ fontSize: 11, fontWeight: 700, color: sectionColor, marginBottom: 3, letterSpacing: "0.06em" }}>
-            {item.date}{item.time ? ` @ ${item.time}` : ""}
+            {metadataText(item.date)}{metadataText(item.time) ? ` @ ${metadataText(item.time)}` : ""}
           </div>
         )}
         {item.bodyHtml ? (
@@ -946,13 +947,13 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
         ) : (
           <>
             <div style={{ fontSize: 13, color: V.ink, lineHeight: 1.5, fontFamily: V.fontBody }}>
-              {item.text}
+              {metadataText(item.text)}
             </div>
             {item.links?.length > 0 && (
               <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {item.links.map((l, i) => (
                   <span key={i} style={{ fontSize: 10, color: sectionColor, fontWeight: 600, background: sectionColor + "15", padding: "1px 6px", borderRadius: 3 }}>
-                    🔗 {l.label}
+                    🔗 {metadataText(l.label)}
                   </span>
                 ))}
               </div>
@@ -960,7 +961,7 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
           </>
         )}
         {item.location && (
-          <div style={{ fontSize: 11, color: V.muted, marginTop: 3 }}>📍 {item.location}</div>
+          <div style={{ fontSize: 11, color: V.muted, marginTop: 3 }}>📍 {metadataText(item.location)}</div>
         )}
       </div>
     </div>
@@ -1254,13 +1255,13 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         {selectedBySection.map(sec => (
           <div key={sec.id} style={{ marginTop: 28 }}>
             <div style={sectionHeadingStyle(getSectionColor(sec.heading))}>
-              {sec.heading}
+              {metadataText(sec.heading)}
             </div>
             {sec.items.map(item => (
               <div key={item.id} style={itemShellStyle(getSectionColor(sec.heading))}>
                 {item.date && (
                   <div style={{ fontSize: 11, fontWeight: 700, color: getSectionColor(sec.heading), marginBottom: 2, letterSpacing: "0.06em" }}>
-                    {item.date}{item.time ? ` @ ${item.time}` : ""}{item.location ? ` • ${item.location}` : ""}
+                    {metadataText(item.date)}{metadataText(item.time) ? ` @ ${metadataText(item.time)}` : ""}{metadataText(item.location) ? ` • ${metadataText(item.location)}` : ""}
                   </div>
                 )}
                 <NewsletterItemBody
@@ -1804,7 +1805,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
                       textAlign: "left",
                     }}
                   >
-                    <span style={{ fontWeight: activeSection === sec.id ? 700 : 400 }}>{sec.heading}</span>
+                    <span style={{ fontWeight: activeSection === sec.id ? 700 : 400 }}>{metadataText(sec.heading)}</span>
                     {count > 0 && (
                       <span style={{ background: color, color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10, fontWeight: 800 }}>{count}</span>
                     )}
@@ -1852,7 +1853,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
                   <div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                       <div>
-                        <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color }}>{sec.heading}</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color }}>{metadataText(sec.heading)}</div>
                         <div style={{ fontSize: 12, color: V.muted }}>{vis.length} items • {vis.filter((i) => selectedIds.has(i.id)).length} selected</div>
                       </div>
                       <Button variant="ghost" onClick={() => toggleSection(sec)} style={{ fontSize: 11, padding: "6px 14px", borderColor: color, color }}>

@@ -9,6 +9,19 @@ import {
   toggleItemHidden,
 } from "../lib/issueStructure";
 
+function displayText(value) {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    for (const key of ["text", "date", "label", "title", "value", "id"]) {
+      if (value[key] != null) return displayText(value[key]);
+    }
+  }
+  return "";
+}
+
 /**
  * @param {{
  *   newsletterData: object | null,
@@ -151,9 +164,10 @@ export default function AdminReviewStructure({
       )}
 
       {draft.sections.map((section, sIdx) => {
-        const sectionColor = getSectionColor(section.heading);
+        const sectionHeading = displayText(section.heading) || "Other";
+        const sectionColor = getSectionColor(sectionHeading);
         return (
-          <section key={section.id || sIdx} style={{ marginBottom: 32 }}>
+          <section key={displayText(section.id) || sIdx} style={{ marginBottom: 32 }}>
             <div
               style={{
                 fontFamily: V.fontDisplay,
@@ -167,7 +181,7 @@ export default function AdminReviewStructure({
                 borderBottom: `3px solid ${sectionColor}44`,
               }}
             >
-              {section.heading}
+              {sectionHeading}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -178,7 +192,7 @@ export default function AdminReviewStructure({
                 const hidden = Boolean(item._adminHidden);
                 return (
                   <div
-                    key={item.id || `${sIdx}-${iIdx}`}
+                    key={displayText(item.id) || `${sIdx}-${iIdx}`}
                     style={{
                       border: `2px solid ${hidden ? `${V.muted}66` : V.border}`,
                       borderRadius: 8,
@@ -268,7 +282,7 @@ export default function AdminReviewStructure({
                         {showDebugIds ? (
                           <>
                             {" "}
-                            · <code style={{ fontSize: 11, color: V.muted }}>{item.id}</code>
+                            · <code style={{ fontSize: 11, color: V.muted }}>{displayText(item.id)}</code>
                           </>
                         ) : null}
                       </div>
