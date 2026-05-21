@@ -137,6 +137,13 @@ function formatDisplayDate(date) {
   }).format(date);
 }
 
+function formatNextIssueDate(nextIssue, currentIssueDate) {
+  const next = String(nextIssue || "").trim();
+  if (!next || /\b\d{4}\b/.test(next)) return next;
+  const year = String(currentIssueDate || "").match(/\b\d{4}\b/)?.[0];
+  return year ? `${next}, ${year}` : next;
+}
+
 /** Matches --accent-clay (for borders where CSS vars cannot be concatenated). */
 const CLAY_HEX = "#bc5838";
 
@@ -1953,7 +1960,7 @@ export default function App() {
       >
         <Logo
           onDark
-          subtitle="Build a short neighborhood version of the latest Altagether newsletter."
+          subtitle="Create your own neighborhood newsletter by choosing items from the latest Altagether Newsletter and adding your own zone-specific updates."
         />
       </header>
 
@@ -1962,20 +1969,17 @@ export default function App() {
           {mode === "captain" ? (
             <div className="nl-captain-intro">
               <div className="nl-captain-intro__meta">
-                <span className="nl-captain-intro__kicker">Current issue</span>
-                <span style={{ color: V.ink, fontWeight: 700 }}>{newsletterData.title}</span>
-                <span>{newsletterData.date}</span>
+                <span className="nl-captain-intro__kicker">Current issue:</span>
+                <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: V.green, fontWeight: 700 }}>
+                  {newsletterData.date}
+                </a>
                 {newsletterData.nextIssue && (
-                  <span style={{ color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>Next: {newsletterData.nextIssue}</span>
+                  <span style={{ color: V.gold, fontFamily: V.fontDisplay, fontWeight: 700 }}>Next: {formatNextIssueDate(newsletterData.nextIssue, newsletterData.date)}</span>
                 )}
               </div>
-              <h2 className="nl-captain-intro__title">Build a short version for your neighbors</h2>
+              <h2 className="nl-captain-intro__title">Help your neighbors stay informed.</h2>
               <p className="nl-captain-intro__body">
-                Start with the latest Altagether Neighborhood Captain Newsletter, choose the updates your neighbors need most, then copy or print your finished version. You can read the{" "}
-                <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: V.green, fontWeight: 700 }}>
-                  full newsletter here
-                </a>
-                .
+                Start with the latest Altagether Neighborhood Captain Newsletter, choose the updates your neighbors need most, then copy or print your finished version.
               </p>
             </div>
           ) : (
