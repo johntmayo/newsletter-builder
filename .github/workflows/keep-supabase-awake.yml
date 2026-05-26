@@ -1,0 +1,19 @@
+name: Keep Supabase Awake
+
+on:
+  schedule:
+    # Twice weekly, safely inside Supabase's free-tier inactivity window.
+    - cron: "0 14 * * 1,4"
+  workflow_dispatch:
+
+jobs:
+  ping-current-issue:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping production current issue endpoint
+        run: |
+          curl --fail --show-error --silent \
+            --max-time 20 \
+            "https://newsletterbuilder.altagether.org/api/current-issue" \
+            > /dev/null
