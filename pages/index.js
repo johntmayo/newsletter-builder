@@ -630,8 +630,7 @@ function AdminView({
   onAdminIssueUpdate,
   onDiscardDraft,
 }) {
-  // TEMPORARY TESTING BYPASS: start authenticated while admin password is paused.
-  const [authed, setAuthed] = useState(true);
+  const [authed, setAuthed] = useState(false);
   const [adminTab, setAdminTab] = useState("upload");
   const [pw, setPw] = useState("");
   const [pwError, setPwError] = useState("");
