@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import AdminReviewStructure from "../components/AdminReviewStructure";
 import { repairLegacyAmpDoubling } from "../lib/sanitizeMailerLiteHtml";
+import { trackEvent, logUsage } from "../lib/analytics";
 
 // ── Design tokens (CSS vars — see styles/globals.css & altagether-subpage-style.md)
 const STORAGE_KEY = "altagether_newsletter_data";
@@ -1435,6 +1436,18 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
   }
 
   function handlePrint() {
+    trackEvent("print_newsletter", {
+      items_selected: visibleSelectedCount,
+      zone_updates: customEntryCount,
+      style_preset: config.stylePreset,
+      zone: config.zone || "(none)",
+    });
+    logUsage("print_newsletter", {
+      zone: config.zone,
+      itemsSelected: visibleSelectedCount,
+      zoneUpdates: customEntryCount,
+      stylePreset: config.stylePreset,
+    });
     window.print();
   }
 
@@ -1483,8 +1496,11 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
         `<p style="margin:0 0 4px;font-size:13px;line-height:1.55;color:#1f2937;">${escapeHtmlPlain(formatCaptainLine(c))}</p>`,
       );
     }
+    // UTM-tagged so clicks from sent zone newsletters show up in GA as real
+    // downstream engagement, attributable per zone via utm_campaign.
+    const trackedNewsletterUrl = `${FULL_NEWSLETTER_URL}?utm_source=zone_newsletter&utm_medium=email&utm_campaign=${encodeURIComponent(config.zone || "unspecified_zone")}`;
     htmlParts.push(
-      `<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;line-height:1.45;">Curated from the <a href="${FULL_NEWSLETTER_URL}" style="color:#4b5563;text-decoration:underline;">Altagether Neighborhood Captain Newsletter</a></p>`,
+      `<p style="margin:0 0 14px;padding-top:8px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:12px;line-height:1.45;">Curated from the <a href="${escapeHtmlAttr(trackedNewsletterUrl)}" style="color:#4b5563;text-decoration:underline;">Altagether Neighborhood Captain Newsletter</a></p>`,
     );
     htmlParts.push("</div>");
     const zl = zlPlain;
@@ -1550,6 +1566,12 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
     const plain = plainParts.join("\n");
     const html = `<!DOCTYPE html><html><body>${htmlParts.join("\n")}</body></html>`;
 
+    const copyEventParams = {
+      items_selected: visibleSelectedCount,
+      zone_updates: customWithText.length,
+      style_preset: config.stylePreset,
+      zone: config.zone || "(none)",
+    };
     try {
       if (navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
         await navigator.clipboard.write([
@@ -1558,12 +1580,22 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
             "text/plain": new Blob([plain], { type: "text/plain" }),
           }),
         ]);
+        copyEventParams.copy_format = "html";
       } else {
         await navigator.clipboard.writeText(plain);
+        copyEventParams.copy_format = "plain_text";
       }
+      trackEvent("copy_for_email", copyEventParams);
+      logUsage("copy_for_email", {
+        zone: config.zone,
+        itemsSelected: visibleSelectedCount,
+        zoneUpdates: customWithText.length,
+        stylePreset: config.stylePreset,
+      });
       setCopyStatus("Copied. Paste into Gmail or Outlook; use Ctrl+Shift+V for plain text only if needed.");
       setTimeout(() => setCopyStatus(""), 5000);
     } catch (err) {
+      trackEvent("copy_for_email_failed", { ...copyEventParams, error_message: err.message });
       setCopyStatus(`Copy failed: ${err.message}`);
       setTimeout(() => setCopyStatus(""), 6000);
     }
