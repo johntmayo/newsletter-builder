@@ -2,8 +2,9 @@ name: Keep Supabase Awake
 
 on:
   schedule:
-    # Twice weekly, safely inside Supabase's free-tier inactivity window.
-    - cron: "0 14 * * 1,4"
+    # Supabase free projects need regular user database activity.
+    # Run a few lightweight reads per day, off the top of the hour to avoid scheduler congestion.
+    - cron: "17 6,14,22 * * *"
   workflow_dispatch:
 
 jobs:
@@ -13,7 +14,19 @@ jobs:
     steps:
       - name: Ping production current issue endpoint
         run: |
-          curl --fail --show-error --silent \
+          set -euo pipefail
+
+          response_file="$(mktemp)"
+          if ! curl --fail-with-body --show-error --silent \
+            --retry 3 \
+            --retry-all-errors \
+            --connect-timeout 10 \
             --max-time 20 \
+            --output "$response_file" \
+            --write-out "http_code=%{http_code} time_total=%{time_total}s\n" \
             "https://newsletterbuilder.altagether.org/api/current-issue" \
-            > /dev/null
+          ; then
+            echo "Keepalive request failed. Response body:"
+            cat "$response_file"
+            exit 1
+          fi
