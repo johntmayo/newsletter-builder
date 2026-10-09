@@ -1,5 +1,5 @@
 import { isValidNewsletterAdminPassword } from "../../lib/newsletterAdminAuth";
-import { getSupabaseAdmin, isSupabaseConfigured, CURRENT_ROW_ID } from "../../lib/supabaseAdmin";
+import { isNewsletterStorageConfigured, saveCurrentIssue } from "../../lib/newsletterStorage";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -16,20 +16,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing parsed newsletter object." });
   }
 
-  if (!isSupabaseConfigured()) {
-    return res.status(503).json({ error: "Newsletter storage is not configured (Supabase)." });
+  if (!isNewsletterStorageConfigured()) {
+    return res.status(503).json({ error: "Newsletter storage is not configured." });
   }
 
-  const supabase = getSupabaseAdmin();
-  const row = {
-    id: CURRENT_ROW_ID,
-    payload: parsed,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase.from("newsletter_current").upsert(row, { onConflict: "id" });
-
-  if (error) {
+  try {
+    await saveCurrentIssue(parsed);
+  } catch (error) {
     return res.status(500).json({ error: error.message });
   }
 

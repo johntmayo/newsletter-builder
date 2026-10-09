@@ -1974,7 +1974,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
 // ── App Shell ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [mode, setMode] = useState("captain"); // "captain" | "admin"
-  /** Issue stored in Supabase / shown to captains */
+  /** Issue stored in Redis / shown to captains */
   const [newsletterData, setNewsletterData] = useState(null);
   const [currentIssueLoading, setCurrentIssueLoading] = useState(true);
   /** Parsed issue not yet published (admin only) */

@@ -16,7 +16,7 @@ An **admin** uploads the master issue (MailerLite HTML export), **parses** it in
 |-------|------------------|
 | **Authoring** | **MailerLite** — newsletter editors build the master newsletter there. |
 | **Export** | Operator downloads the **HTML version** from MailerLite (not editable by this team). |
-| **Ingest + structure** | **Newsletter Builder (this app)** — upload HTML → parse → **Review structure** → publish to Supabase. |
+| **Ingest + structure** | **Newsletter Builder (this app)** — upload HTML → parse → **Review structure** → publish to Vercel-managed Redis. |
 | **Customization** | **Captains** use this app only — select which master items to include; output is **not** sent back to MailerLite. |
 
 MailerLite is **upstream**; this product **consumes** its HTML. We **cannot** rely on changing MailerLite’s markup discipline to fix segmentation—improvements belong in **parsing, normalization, or admin tooling** here.
@@ -41,7 +41,7 @@ The captain and admin experiences live on the same Next.js page (`pages/index.js
 | Framework | **Next.js 14** (Pages Router) |
 | UI | **React 18**, inline styles + `styles/globals.css` design tokens |
 | HTML parsing | **node-html-parser** (`lib/parseNewsletterHtml.js`, `lib/sanitizeMailerLiteHtml.js`) |
-| Shared “current issue” | **Supabase** (Postgres JSON row) via **@supabase/supabase-js** |
+| Shared “current issue” | **Vercel Marketplace Redis / Upstash Redis** via **@upstash/redis** |
 | Hosting | **Vercel** (typical setup: GitHub → deploy) |
 | Legacy / standalone | `newsletter-builder.jsx` — older single-file copy; **production path is the Next app** |
 
@@ -54,19 +54,18 @@ pages/
   index.js              — Main UI: captain flow, admin, preview, print
   api/
     parse.js            — POST: raw MailerLite HTML → parsed JSON
-    current-issue.js    — GET: published issue from Supabase
+    current-issue.js    — GET: published issue from Redis
     verify-admin.js     — POST: check admin password
-    publish-newsletter.js — POST: write parsed issue to Supabase when admin explicitly publishes (admin password)
+    publish-newsletter.js — POST: write parsed issue to Redis when admin explicitly publishes (admin password)
     save-issue.js       — POST: save issue after structure edits (admin password)
 lib/
   parseNewsletterHtml.js   — Section/item extraction from HTML
   sanitizeMailerLiteHtml.js — HTML cleanup for display / email
   issueStructure.js        — Merge / split / hide item helpers + renumber IDs
-  supabaseAdmin.js         — Server Supabase client (service role)
+  newsletterStorage.js     — Server Redis storage helper
   newsletterAdminAuth.js — Admin password check (env + dev fallback)
 components/
   AdminReviewStructure.js — Admin “Review structure” tab UI (live issue vs unpublished draft modes)
-supabase-newsletter-current.sql — DDL for Supabase (run once)
 env.example             — Environment variable names (copy to `.env.local`)
 ```
 
@@ -78,19 +77,19 @@ Set on **Vercel** (Production / Preview as needed) and in **`.env.local`** for l
 
 | Variable | Purpose |
 |----------|---------|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Server only.** Full DB access; never expose to the browser |
+| `UPSTASH_REDIS_REST_URL` / `KV_REST_API_URL` | Redis REST endpoint from the Vercel Marketplace Redis integration |
+| `UPSTASH_REDIS_REST_TOKEN` / `KV_REST_API_TOKEN` | **Server only.** Redis REST token; never expose to the browser |
+| `USAGE_EVENTS_MAX` | Optional cap for retained best-effort usage events; defaults to `10000` |
 | `NEWSLETTER_ADMIN_PASSWORD` | Must match what admins type in the Admin tab. If unset, code falls back to a default (change this in production) |
 
-**Supabase keys:** The dashboard may show “new” (`sb_secret_…`) vs “legacy” JWT keys; either elevated secret can work with the client during Supabase’s transition. Project URL is under **General** or the Connect dialog, not always on the API Keys page.
+**Redis keys:** Vercel may inject either `UPSTASH_*` names or older `KV_*` names depending on the integration. The app accepts both.
 
 ---
 
 ## Data: where the “current issue” lives
 
-1. **Supabase table** `newsletter_current` (singleton row `id = 1`)  
-   - Column **`payload`**: JSON — full parsed newsletter object (`title`, `date`, `sections[]`, each with `items[]`, etc.).  
-   - Created by running `supabase-newsletter-current.sql` in the Supabase SQL Editor.
+1. **Redis key** `newsletter-builder:current-issue`
+   - Value: `{ payload, updated_at }`, where `payload` is the full parsed newsletter object (`title`, `date`, `sections[]`, each with `items[]`, etc.).
 
 2. **Browser `localStorage`** key `altagether_newsletter_data`  
    - Cache / offline-ish behavior: on load, the app fetches `/api/current-issue`; if that fails or returns empty, it may fall back to localStorage.  
@@ -109,12 +108,12 @@ Set on **Vercel** (Production / Preview as needed) and in **`.env.local`** for l
 | Route | Method | Auth | Behavior |
 |-------|--------|------|----------|
 | `/api/parse` | POST | None | Body `{ html }` → parsed JSON (used on upload) |
-| `/api/current-issue` | GET | None | Reads `newsletter_current` via service role |
+| `/api/current-issue` | GET | None | Reads the current issue from Redis |
 | `/api/verify-admin` | POST | Body password | Validates `NEWSLETTER_ADMIN_PASSWORD` |
-| `/api/publish-newsletter` | POST | Body password | Body `{ parsed }` — upserts that JSON to Supabase when admin clicks **Publish for all visitors** |
+| `/api/publish-newsletter` | POST | Body password | Body `{ parsed }` — saves that JSON to Redis when admin clicks **Publish for all visitors** |
 | `/api/save-issue` | POST | Body password | Upserts full issue JSON (e.g. after structure edits); sets `_structureEditedAt` |
 
-All Supabase writes use the **service role** only inside these routes.
+All Redis writes happen only inside server-side API routes.
 
 ---
 
@@ -153,7 +152,7 @@ The parser (`lib/parseNewsletterHtml.js`) targets **MailerLite-style** exports a
 
 3. **Review structure** (new edition) — While a draft exists, merge/split/hide updates stay in draft state. **Save structure (draft)** confirms locally and reminds you to publish; it does **not** call `/api/save-issue`. Structural changes sync to the draft immediately so **Publish** sends the latest structure.
 
-4. **Publish** — On **Upload issue**, **Publish for all visitors** (`/api/publish-newsletter`) writes the draft to Supabase and refreshes client cache (`localStorage`). **Discard draft** drops the draft without changing the live issue.
+4. **Publish** — On **Upload issue**, **Publish for all visitors** (`/api/publish-newsletter`) writes the draft to Redis and refreshes client cache (`localStorage`). **Discard draft** drops the draft without changing the live issue.
 
 5. **Review structure** (already-live issue) — When there is **no** unpublished draft, this tab edits what everyone sees. **Save structure for everyone** → `/api/save-issue` (same as before).
 
@@ -165,7 +164,7 @@ Tabs stay mounted when switching so in-progress edits on the review UI are not l
 
 ## Security notes (short)
 
-- **Never** put `SUPABASE_SERVICE_ROLE_KEY` in client code or public env vars prefixed with `NEXT_PUBLIC_`.  
+- **Never** put Redis REST tokens in client code or public env vars prefixed with `NEXT_PUBLIC_`.
 - Set a strong **`NEWSLETTER_ADMIN_PASSWORD`** on Vercel; do not rely on the code fallback.  
 - Admin password is sent over HTTPS to the server for verify/publish/save — standard pattern; rotate password if leaked.
 
@@ -173,7 +172,7 @@ Tabs stay mounted when switching so in-progress edits on the review UI are not l
 
 ## Design / UX decisions (record)
 
-- **Shared issue via Supabase** so any captain gets the latest edition without Git or per-browser uploads.  
+- **Shared issue via Redis** so any captain gets the latest edition without Git or per-browser uploads.
 - **Parse → review → publish** so structure can be fixed **before** a new edition replaces the live issue for all visitors.  
 - **Structure editor** preferred over perfect MailerLite markup discipline for volunteers.  
 - **Zone updates** use a **single** auto section title (`{zone} Updates`) with per-entry optional **title line** + body; avoids multiple fake “section” headings in preview/PDF/email.  
@@ -190,7 +189,7 @@ cp env.example .env.local   # fill in values
 npm run dev
 ```
 
-Open `http://localhost:3000`. Without Supabase configured, publish/save will fail; fetch current issue may 503 — localStorage can still hold a parsed issue for UI testing.
+Open `http://localhost:3000`. Without Redis configured, publish/save will fail; fetch current issue may 503 — localStorage can still hold a parsed issue for UI testing.
 
 ```bash
 npm run build
@@ -202,8 +201,8 @@ Use before shipping to confirm production compile.
 
 ## Deployment checklist (for a new maintainer)
 
-1. Supabase project created; **`supabase-newsletter-current.sql`** executed.  
-2. Vercel env vars: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEWSLETTER_ADMIN_PASSWORD`.  
+1. Vercel Marketplace Redis / Upstash Redis integration connected to the Vercel project.
+2. Vercel env vars: Redis REST URL/token plus `NEWSLETTER_ADMIN_PASSWORD`.
 3. Redeploy after env changes.  
 4. Smoke test: admin parse → review (optional) → publish → incognito captain sees new issue; separate check: structure save on live issue → captain refresh sees update.  
 5. Document the admin password location for your org (password manager / handoff), **not** in Git.
@@ -223,7 +222,7 @@ Use before shipping to confirm production compile.
 Product / org contacts (fill in for your handoff):
 
 - **Newsletter questions:** newsletter@altagether.org (referenced in app footer copy)  
-- **Supabase / Vercel access:** _[list accounts / owners]_
+- **Vercel / Redis access:** _[list accounts / owners]_
 
 ---
 
