@@ -10,7 +10,39 @@ const CAPTAIN_CONFIG_STORAGE_KEY = "altagether_captain_config";
 const CUSTOM_ENTRIES_STORAGE_KEY = "altagether_custom_entries";
 const SELECTED_IDS_STORAGE_KEY = "altagether_selected_ids";
 const BUILDER_STATE_STORAGE_KEY = "altagether_builder_state";
+const BUILD_HISTORY_STORAGE_KEY = "altagether_build_history";
 const FULL_NEWSLETTER_URL = "https://altagether.org/newsletter";
+
+const ZONE_UPDATE_TEMPLATES = [
+  {
+    id: "meeting",
+    icon: "📅",
+    label: "Block meeting",
+    heading: "Next block meeting",
+    text: "Join your neighbors on [day and time] at [place]. We'll talk about [topics]. Everyone is welcome, so bring a neighbor!",
+  },
+  {
+    id: "welcome",
+    icon: "👋",
+    label: "Welcome neighbors",
+    heading: "Welcome, new neighbors!",
+    text: "Please give a warm welcome to [names], who just moved in on [street]. If you see them, stop and say hello.",
+  },
+  {
+    id: "thanks",
+    icon: "💛",
+    label: "Thank-you",
+    heading: "Thank you",
+    text: "A big thank-you to [name or group] for [what they did]. It made a real difference for our neighborhood.",
+  },
+  {
+    id: "event",
+    icon: "🎉",
+    label: "Local event",
+    heading: "[Event name]",
+    text: "Join us on [day and time] at [place]. [What to bring or how to sign up]",
+  },
+];
 
 const DEFAULT_CAPTAIN_CONFIG = {
   name: "",
@@ -85,6 +117,72 @@ function selectedIdsStorageKey(newsletterData) {
   return `${SELECTED_IDS_STORAGE_KEY}_${issueDraftStorageSuffix(newsletterData)}`;
 }
 
+/** `[day and time]`-style template blanks; `[label](url)` links are not blanks. */
+const TEMPLATE_BLANK_PATTERN = /\[([^\]\n]+)\](?!\()/g;
+
+function findTemplateBlanks(text) {
+  return [...String(text || "").matchAll(TEMPLATE_BLANK_PATTERN)].map((m) => m[1]);
+}
+
+function entryBlanks(entry) {
+  return [...findTemplateBlanks(entry.heading), ...findTemplateBlanks(entry.text)];
+}
+
+function isEntryFromEarlierIssue(entry, issueKey) {
+  return Boolean(entry.text) && Boolean(issueKey) && entry.issueKey !== issueKey;
+}
+
+function readBuildHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(BUILD_HISTORY_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((h) => h && typeof h.issueKey === "string") : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function recordBuild(newsletterData) {
+  const issueKey = issueDraftStorageSuffix(newsletterData);
+  const history = readBuildHistory();
+  if (history.some((h) => h.issueKey === issueKey)) return history;
+  const next = [
+    ...history,
+    {
+      issueKey,
+      issueDate: metadataText(newsletterData?.date),
+      nextIssue: formatNextIssueDate(newsletterData?.nextIssue, newsletterData?.date),
+      builtAt: new Date().toISOString(),
+    },
+  ].slice(-50);
+  try {
+    localStorage.setItem(BUILD_HISTORY_STORAGE_KEY, JSON.stringify(next));
+  } catch (_) {}
+  return next;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function issueTime(entry) {
+  const t = Date.parse(entry.issueDate);
+  return Number.isFinite(t) ? t : Date.parse(entry.builtAt);
+}
+
+/** Issues built in this browser, plus how many in a row ending with the latest one. */
+function buildStreakStats(history) {
+  const sorted = [...history].sort((a, b) => (issueTime(a) || 0) - (issueTime(b) || 0));
+  let streak = sorted.length ? 1 : 0;
+  for (let i = sorted.length - 1; i > 0; i -= 1) {
+    const prev = sorted[i - 1];
+    const curT = issueTime(sorted[i]);
+    const expectedT = Date.parse(prev.nextIssue);
+    const consecutive = (Number.isFinite(expectedT) && Math.abs(curT - expectedT) <= 4 * DAY_MS)
+      || curT - issueTime(prev) <= 21 * DAY_MS;
+    if (!consecutive) break;
+    streak += 1;
+  }
+  return { total: sorted.length, streak, latestIssueKey: sorted[sorted.length - 1]?.issueKey || "" };
+}
+
 /** Section rail colors — distinct hues for scanability (not all from core tokens). */
 const SECTION_COLORS = {
   "Recovery Updates": "#283618",
@@ -139,6 +237,12 @@ function formatDisplayDate(date) {
     day: "numeric",
     year: "numeric",
   }).format(date);
+}
+
+function shortIssueDate(text) {
+  const d = new Date(text);
+  if (!text || Number.isNaN(d.getTime())) return text || "";
+  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" }).format(d);
 }
 
 function metadataText(value) {
@@ -365,6 +469,19 @@ function AutoLinkedText({ text, color = V.green }) {
   );
 }
 
+function BlankHighlightedText({ text }) {
+  const source = String(text || "");
+  const pieces = [];
+  let cursor = 0;
+  for (const m of source.matchAll(TEMPLATE_BLANK_PATTERN)) {
+    if (m.index > cursor) pieces.push(source.slice(cursor, m.index));
+    pieces.push(<mark key={m.index} className="nl-blank">{m[0]}</mark>);
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < source.length) pieces.push(source.slice(cursor));
+  return <>{pieces}</>;
+}
+
 function CustomUpdateText({ text, color = V.green }) {
   return (
     <>
@@ -380,7 +497,7 @@ function CustomUpdateText({ text, color = V.green }) {
             {part.label}
           </a>
         ) : (
-          <span key={index}>{part.text}</span>
+          <span key={index}><BlankHighlightedText text={part.text} /></span>
         ),
       )}
     </>
@@ -431,6 +548,35 @@ function buildSelectedBySection(newsletterData, selectedIds) {
       items: sec.items.filter((it) => selectedIds.has(it.id) && !it._adminHidden),
     }))
     .filter((sec) => sec.items.length > 0);
+}
+
+/** Aggregate build counts for the published issue; null when unavailable or for a different issue. */
+async function fetchIssueStats(uploadedAt) {
+  try {
+    const response = await fetch("/api/issue-stats");
+    if (!response.ok) return null;
+    const body = await response.json();
+    if (!Number.isFinite(body?.captains)) return null;
+    if (uploadedAt && body.uploadedAt && body.uploadedAt !== uploadedAt) return null;
+    return body;
+  } catch (_) {
+    return null;
+  }
+}
+
+function captainCountLine(captains) {
+  if (captains === 1) return "1 captain has shared this issue so far.";
+  return `${captains} captains have shared this issue so far.`;
+}
+
+function recommendedItemIds(newsletterData) {
+  const ids = [];
+  for (const sec of newsletterData?.sections || []) {
+    for (const it of captainVisibleItems(sec.items)) {
+      if (it._adminRecommended) ids.push(it.id);
+    }
+  }
+  return ids;
 }
 
 function countCaptainVisibleSelected(newsletterData, selectedIds) {
@@ -936,6 +1082,9 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
         {selected && <span style={{ color: "#fff", fontSize: 11, fontWeight: 900 }}>✓</span>}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
+        {item._adminRecommended ? (
+          <div className="nl-recommended-tag" title="The newsletter team recommends this story">★ Recommended</div>
+        ) : null}
         {item.date && (
           <div style={{ fontSize: 11, fontWeight: 700, color: sectionColor, marginBottom: 3, letterSpacing: "0.06em" }}>
             {metadataText(item.date)}{metadataText(item.time) ? ` @ ${metadataText(item.time)}` : ""}
@@ -980,45 +1129,135 @@ function ItemCard({ item, selected, onToggle, sectionColor }) {
 }
 
 // ── Custom Entry Editor ────────────────────────────────────────────────────────
-function CustomEntryEditor({ entries, onChange }) {
-  function add() {
-    onChange([...entries, { id: `custom_${Date.now()}`, heading: "", text: "", type: "custom" }]);
+function CustomEntryEditor({ entries, onChange, issueKey, preset }) {
+  const fieldRefs = useRef({});
+  const [pendingFocusId, setPendingFocusId] = useState(null);
+
+  function selectBlank(entry, label) {
+    const token = `[${label}]`;
+    for (const field of ["heading", "text"]) {
+      const el = fieldRefs.current[`${entry.id}:${field}`];
+      const at = String(entry[field] || "").indexOf(token);
+      if (el && at >= 0) {
+        el.focus();
+        el.setSelectionRange(at, at + token.length);
+        return;
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!pendingFocusId) return;
+    const entry = entries.find((e) => e.id === pendingFocusId);
+    setPendingFocusId(null);
+    if (!entry) return;
+    const [first] = entryBlanks(entry);
+    if (first) selectBlank(entry, first);
+    else fieldRefs.current[`${entry.id}:text`]?.focus();
+  }, [pendingFocusId, entries]);
+
+  function add(template) {
+    const id = `custom_${Date.now()}`;
+    onChange([
+      ...entries,
+      { id, heading: template?.heading || "", text: template?.text || "", type: "custom", issueKey },
+    ]);
+    setPendingFocusId(id);
   }
   function update(id, field, val) {
-    onChange(entries.map(e => e.id === id ? { ...e, [field]: val } : e));
+    onChange(entries.map(e => e.id === id ? { ...e, [field]: val, issueKey } : e));
+  }
+  function keep(id) {
+    onChange(entries.map(e => e.id === id ? { ...e, issueKey } : e));
   }
   function remove(id) {
     onChange(entries.filter(e => e.id !== id));
   }
 
+  const fieldStyle = { width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, boxSizing: "border-box", background: V.card };
+
   return (
     <div>
-      {entries.map(e => (
-        <div key={e.id} style={{ marginBottom: 12, background: V.inputBg, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, padding: 14 }}>
-          <input
-            value={e.heading} onChange={ev => update(e.id, "heading", ev.target.value)}
-            placeholder="Optional title for this update (one line)"
-            style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, marginBottom: 8, boxSizing: "border-box", background: V.card }}
-          />
-          <textarea
-            value={e.text} onChange={ev => update(e.id, "text", ev.target.value)}
-            placeholder="Write your zone-specific update here…"
-            rows={4}
-            style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, resize: "vertical", boxSizing: "border-box", background: V.card, lineHeight: 1.6 }}
-          />
-          <div style={{ marginTop: 5, fontSize: 11, color: V.muted, lineHeight: 1.45 }}>
-            <strong>Links:</strong> paste a web address and it becomes clickable.
-            <br />
-            To link your own words instead, use <code>[Register here](altagether.org)</code>
+      {entries.map(e => {
+        const blanks = entryBlanks(e);
+        const fromEarlierIssue = isEntryFromEarlierIssue(e, issueKey);
+        return (
+          <div key={e.id} className="nl-update-card" style={{ borderColor: fromEarlierIssue ? "rgba(245, 158, 11, 0.6)" : undefined }}>
+            {fromEarlierIssue ? (
+              <div className="nl-update-stale">
+                <span><strong>From your last issue.</strong> Still current?</span>
+                <span style={{ display: "flex", gap: 6 }}>
+                  <Button variant="secondary" onClick={() => keep(e.id)} style={{ padding: "4px 10px", fontSize: 11 }}>Keep it</Button>
+                  <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "4px 10px", fontSize: 11 }}>Remove</Button>
+                </span>
+              </div>
+            ) : null}
+            <div className="nl-update-grid">
+              <div style={{ minWidth: 0 }}>
+                <input
+                  ref={(el) => { fieldRefs.current[`${e.id}:heading`] = el; }}
+                  value={e.heading} onChange={ev => update(e.id, "heading", ev.target.value)}
+                  placeholder="Optional title for this update (one line)"
+                  style={{ ...fieldStyle, marginBottom: 8 }}
+                />
+                <textarea
+                  ref={(el) => { fieldRefs.current[`${e.id}:text`] = el; }}
+                  value={e.text} onChange={ev => update(e.id, "text", ev.target.value)}
+                  placeholder="Write your zone-specific update here…"
+                  rows={5}
+                  style={{ ...fieldStyle, resize: "vertical", lineHeight: 1.6 }}
+                />
+                {blanks.length ? (
+                  <div className="nl-blank-prompts">
+                    <span>Fill in:</span>
+                    {blanks.map((label, i) => (
+                      <button key={`${label}-${i}`} type="button" onClick={() => selectBlank(e, label)}>{label}</button>
+                    ))}
+                  </div>
+                ) : null}
+                <div style={{ marginTop: 6, fontSize: 11, color: V.muted, lineHeight: 1.45 }}>
+                  <strong>Links:</strong> paste a web address and it becomes clickable.
+                  <br />
+                  To link your own words instead, use <code>[Register here](altagether.org)</code>
+                </div>
+              </div>
+              <div className="nl-update-preview" aria-label="How this update will look">
+                <div className="nl-step-kicker" style={{ color: V.muted }}>How it will look</div>
+                {e.text || e.heading ? (
+                  <div style={{ ...newsletterItemShellStyle(CLAY_HEX, preset.id === "clean"), marginBottom: 0 }}>
+                    <ZoneUpdateBody entry={e} preset={preset} />
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: V.muted, lineHeight: 1.5 }}>Start typing and your update will appear here.</div>
+                )}
+                {e.heading && !e.text ? (
+                  <div style={{ marginTop: 8, fontSize: 11, color: V.clay }}>Add some text below the title, or this update won&apos;t be included.</div>
+                ) : null}
+              </div>
+            </div>
+            {!fromEarlierIssue ? (
+              <div style={{ textAlign: "right", marginTop: 8 }}>
+                <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "5px 12px", fontSize: 11 }}>Remove</Button>
+              </div>
+            ) : null}
           </div>
-          <div style={{ textAlign: "right", marginTop: 6 }}>
-            <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "5px 12px", fontSize: 11 }}>Remove</Button>
-          </div>
+        );
+      })}
+      <div className="nl-template-picker">
+        <div className="nl-template-picker__title">
+          {entries.length ? "Add another update" : "Need an idea? Start from a template"}
         </div>
-      ))}
-      <Button variant="ghost" onClick={add} style={{ width: "100%", padding: "9px", fontSize: 12 }}>
-        + Add Zone Update
-      </Button>
+        <div className="nl-template-picker__grid">
+          {ZONE_UPDATE_TEMPLATES.map((t) => (
+            <button key={t.id} type="button" className="nl-template-chip" onClick={() => add(t)}>
+              <span aria-hidden="true">{t.icon}</span> {t.label}
+            </button>
+          ))}
+          <button type="button" className="nl-template-chip nl-template-chip--blank" onClick={() => add(null)}>
+            + Blank update
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1183,6 +1422,138 @@ function BuilderStatus({ config, preset, visibleSelectedCount, customEntryCount,
   );
 }
 
+function WelcomeBackBanner({ welcome, onEditHeader, onReviewUpdates, onDismiss }) {
+  const { who, issueLabel, newDate, carriedUpdates } = welcome;
+  return (
+    <div className="nl-welcome-back" role="status">
+      <div style={{ minWidth: 0 }}>
+        <div className="nl-welcome-back__title">
+          Welcome back, {who}! {issueLabel ? `The ${issueLabel} issue is ready.` : "A new issue is ready."}
+        </div>
+        <p className="nl-welcome-back__copy">
+          Your header and details are saved, so you can go straight to picking stories.
+          {newDate ? ` We updated your newsletter date to ${newDate}.` : ""}{" "}
+          <button type="button" className="nl-text-btn" onClick={onEditHeader}>Edit header &amp; details</button>
+        </p>
+        {welcome.streak >= 2 ? (
+          <p className="nl-welcome-back__copy">
+            🔥 You&apos;ve shared {welcome.streak} issues in a row. Keep it going!
+          </p>
+        ) : null}
+        {carriedUpdates > 0 ? (
+          <p className="nl-welcome-back__copy">
+            You have {carriedUpdates} zone {carriedUpdates === 1 ? "update" : "updates"} from last time.{" "}
+            <button type="button" className="nl-text-btn" onClick={onReviewUpdates}>
+              Check {carriedUpdates === 1 ? "it's" : "they're"} still current
+            </button>
+          </p>
+        ) : null}
+      </div>
+      <button type="button" className="nl-welcome-back__close" aria-label="Dismiss welcome message" onClick={onDismiss}>
+        ×
+      </button>
+    </div>
+  );
+}
+
+function FinishScreen({ finish, config, storyCount, updateCount, issueStats, onClose, onRepeat }) {
+  const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const [checked, setChecked] = useState({});
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const who = (config.zone || config.name || "").trim();
+  const storyText = `${storyCount} ${storyCount === 1 ? "story" : "stories"}`;
+  const updateText = `${updateCount} ${updateCount === 1 ? "update" : "updates"} from you`;
+  const summary = storyCount && updateCount
+    ? `${storyText} plus ${updateText}.`
+    : storyCount
+      ? `${storyText} from this issue.`
+      : `${updateText}.`;
+  const subjectDate = shortIssueDate((config.issueDate || "").trim());
+  const subject = `${(config.name || "").trim() || zoneUpdatesSectionTitle(config.zone, "")}${subjectDate ? ` — ${subjectDate}` : ""}`;
+
+  const steps = finish.kind === "copy"
+    ? [
+        "Open Gmail or Outlook and start a new email.",
+        "Paste your newsletter into the message (Ctrl+V, or ⌘V on a Mac).",
+        <>Add a subject line, like <strong>{subject}</strong></>,
+        "Put your neighbors' addresses in BCC so they stay private.",
+        "Send it!",
+      ]
+    : [
+        "In the print window, choose \"Save as PDF\" or your printer.",
+        "Share the PDF by email or text, or print copies.",
+        "Hand out copies or post one where neighbors will see it.",
+      ];
+  const allDone = steps.every((_, i) => checked[i]);
+
+  let achievement;
+  if (finish.streak >= 2) achievement = `🔥 ${finish.streak} issues in a row. Your neighbors can count on you!`;
+  else if (finish.total >= 2) achievement = `🌟 That's ${finish.total} issues you've shared with your neighbors.`;
+  else achievement = "🌱 Your first issue with the builder. Welcome aboard!";
+
+  return (
+    <div className="nl-finish-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div
+        ref={dialogRef}
+        className="nl-finish"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="nl-finish-title"
+        tabIndex={-1}
+      >
+        <div className="nl-finish__burst" aria-hidden="true">🎉</div>
+        <h2 id="nl-finish-title" className="nl-finish__title">
+          {who ? `Your ${who} newsletter is ready!` : "Your newsletter is ready!"}
+        </h2>
+        <p className="nl-finish__summary">
+          {finish.kind === "copy" ? "Copied and ready to paste: " : "Ready to share: "}{summary}
+        </p>
+        <ul className="nl-finish__badges">
+          <li>{achievement}</li>
+          {issueStats?.captains > 0 ? <li>👥 {captainCountLine(issueStats.captains)}</li> : null}
+        </ul>
+
+        <div className="nl-setup-group-title" style={{ marginTop: 18 }}>Next steps</div>
+        <ul className="nl-finish__steps">
+          {steps.map((text, i) => (
+            <li key={i}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={Boolean(checked[i])}
+                  onChange={() => setChecked((prev) => ({ ...prev, [i]: !prev[i] }))}
+                />
+                <span>{text}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+        {allDone ? (
+          <p className="nl-finish__done">All done. Thanks for keeping your neighbors in the loop! 🙌</p>
+        ) : null}
+
+        <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginTop: 20 }}>
+          <Button variant="secondary" onClick={onRepeat}>
+            {finish.kind === "copy" ? "Copy again" : "Print again"}
+          </Button>
+          <Button onClick={onClose}>Back to my newsletter</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Preview / Print output ─────────────────────────────────────────────────────
 /** Header image + title band + zone links strip; shared by the live setup preview and the full newsletter. */
 function NewsletterMasthead({ config }) {
@@ -1276,6 +1647,39 @@ function NewsletterMasthead({ config }) {
   );
 }
 
+function newsletterItemShellStyle(color, clean) {
+  return clean
+    ? {
+        marginBottom: 12,
+        padding: "12px 14px",
+        border: `1px solid ${V.border}`,
+        borderLeft: `4px solid ${color}`,
+        borderRadius: 6,
+        background: V.card,
+      }
+    : {
+        marginBottom: 14,
+        paddingLeft: 12,
+        borderLeft: `3px solid ${color}30`,
+      };
+}
+
+function ZoneUpdateBody({ entry, preset }) {
+  const clean = preset.id === "clean";
+  return (
+    <>
+      {entry.heading ? (
+        <div style={{ fontSize: 14, fontWeight: 700, fontFamily: preset.bodyFont, color: V.ink, marginBottom: 6 }}>
+          <BlankHighlightedText text={entry.heading} />
+        </div>
+      ) : null}
+      <div style={{ fontSize: 13, lineHeight: clean ? 1.5 : 1.6, whiteSpace: "pre-wrap", color: V.ink, fontFamily: preset.bodyFont }}>
+        <CustomUpdateText text={entry.text} color={CLAY_HEX} />
+      </div>
+    </>
+  );
+}
+
 function NewsletterPreview({ config, newsletterData, selectedIds, customEntries }) {
   const { name, zone } = config;
   const preset = getNewsletterStylePreset(config.stylePreset);
@@ -1304,20 +1708,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
         letterSpacing: "0.04em",
         textTransform: "uppercase",
       };
-  const itemShellStyle = (color) => clean
-    ? {
-        marginBottom: 12,
-        padding: "12px 14px",
-        border: `1px solid ${V.border}`,
-        borderLeft: `4px solid ${color}`,
-        borderRadius: 6,
-        background: V.card,
-      }
-    : {
-        marginBottom: 14,
-        paddingLeft: 12,
-        borderLeft: `3px solid ${color}30`,
-      };
+  const itemShellStyle = (color) => newsletterItemShellStyle(color, clean);
 
   const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
 
@@ -1337,12 +1728,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
                 key={e.id}
                 style={itemShellStyle(CLAY_HEX)}
               >
-                {e.heading ? (
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: preset.bodyFont, color: V.ink, marginBottom: 6 }}>{e.heading}</div>
-                ) : null}
-                <div style={{ fontSize: 13, lineHeight: clean ? 1.5 : 1.6, whiteSpace: "pre-wrap", color: V.ink, fontFamily: preset.bodyFont }}>
-                  <CustomUpdateText text={e.text} color={CLAY_HEX} />
-                </div>
+                <ZoneUpdateBody entry={e} preset={preset} />
               </div>
             ))}
           </div>
@@ -1398,6 +1784,13 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
   const [localDraftLoaded, setLocalDraftLoaded] = useState(false);
   const [selectedIssueKeyLoaded, setSelectedIssueKeyLoaded] = useState("");
   const [draftNotice, setDraftNotice] = useState("");
+  const [arrivalHandled, setArrivalHandled] = useState(false);
+  const [welcomeBack, setWelcomeBack] = useState(null);
+  const [preselectedCount, setPreselectedCount] = useState(0);
+  const [issueStats, setIssueStats] = useState(null);
+  const [finish, setFinish] = useState(null);
+  const savedBuilderStateRef = useRef(null);
+  const draftRestoredRef = useRef(false);
   const printRef = useRef();
 
   useEffect(() => {
@@ -1431,18 +1824,65 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
       if (savedBuilderState) {
         const parsed = JSON.parse(savedBuilderState);
         if (parsed && typeof parsed === "object") {
-          if ([0, 1, 2].includes(parsed.step)) setStep(parsed.step);
-          if (typeof parsed.activeSection === "string") setActiveSection(parsed.activeSection);
+          savedBuilderStateRef.current = parsed;
           restored = true;
         }
       }
     } catch (_) {
       // Local drafts are convenience-only; ignore corrupt or unavailable storage.
     } finally {
-      if (restored) setDraftNotice("Your draft was restored on this device.");
+      draftRestoredRef.current = restored;
       setLocalDraftLoaded(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (arrivalHandled || !localDraftLoaded || !newsletterData) return;
+    const issueKey = issueDraftStorageSuffix(newsletterData);
+    const saved = savedBuilderStateRef.current;
+    let sameIssue = false;
+    if (saved?.issueKey) {
+      sameIssue = saved.issueKey === issueKey;
+    } else {
+      try {
+        const ids = JSON.parse(localStorage.getItem(selectedIdsStorageKey(newsletterData)) || "[]");
+        sameIssue = Array.isArray(ids) && ids.length > 0;
+      } catch (_) {}
+    }
+    const hasSavedDetails = Boolean((config.zone || "").trim() || (config.name || "").trim());
+    const newIssueForReturningCaptain = !(sameIssue && saved) && hasSavedDetails;
+    if (!newIssueForReturningCaptain) {
+      setCustomEntries((prev) => prev.map((e) => (e.issueKey ? e : { ...e, issueKey })));
+    }
+
+    if (sameIssue && saved) {
+      if ([0, 1, 2].includes(saved.step)) setStep(saved.step);
+      if (typeof saved.activeSection === "string") setActiveSection(saved.activeSection);
+      if (draftRestoredRef.current) setDraftNotice("Your draft was restored on this device.");
+    } else if (hasSavedDetails) {
+      const today = formatDisplayDate(new Date());
+      const oldDate = (config.issueDate || "").trim();
+      const dateUpdated = Boolean(oldDate) && oldDate !== today;
+      if (dateUpdated) setConfig((prev) => ({ ...prev, issueDate: today }));
+      setStep(1);
+      if (newsletterData.sections?.length) setActiveSection(newsletterData.sections[0].id);
+      const history = buildStreakStats(readBuildHistory());
+      setWelcomeBack({
+        who: (config.zone || config.name).trim(),
+        issueLabel: shortIssueDate(metadataText(newsletterData.date)),
+        newDate: dateUpdated ? today : "",
+        carriedUpdates: customEntries.filter((e) => e.text).length,
+        streak: history.latestIssueKey === issueKey ? 0 : history.streak,
+      });
+    } else if (draftRestoredRef.current) {
+      setDraftNotice("Your draft was restored on this device.");
+    }
+    setArrivalHandled(true);
+  }, [arrivalHandled, localDraftLoaded, newsletterData, config, customEntries]);
+
+  useEffect(() => {
+    if (step !== 1) setWelcomeBack(null);
+  }, [step]);
 
   useEffect(() => {
     if (!localDraftLoaded) return;
@@ -1467,17 +1907,35 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
   }, [selectedIds, localDraftLoaded, newsletterData, selectedIssueKeyLoaded]);
 
   useEffect(() => {
-    if (!localDraftLoaded) return;
+    if (!arrivalHandled || !newsletterData) return;
     try {
-      localStorage.setItem(BUILDER_STATE_STORAGE_KEY, JSON.stringify({ step, activeSection }));
+      localStorage.setItem(BUILDER_STATE_STORAGE_KEY, JSON.stringify({
+        step,
+        activeSection,
+        issueKey: issueDraftStorageSuffix(newsletterData),
+      }));
     } catch (_) {}
-  }, [step, activeSection, localDraftLoaded]);
+  }, [step, activeSection, arrivalHandled, newsletterData]);
 
   useEffect(() => {
     if (!draftNotice) return undefined;
     const t = setTimeout(() => setDraftNotice(""), 6500);
     return () => clearTimeout(t);
   }, [draftNotice]);
+
+  const currentIssueKey = newsletterData ? issueDraftStorageSuffix(newsletterData) : "";
+  const currentUploadedAt = newsletterData?._uploadedAt;
+  useEffect(() => {
+    if (!currentIssueKey) return undefined;
+    let cancelled = false;
+    setIssueStats(null);
+    fetchIssueStats(currentUploadedAt).then((stats) => {
+      if (!cancelled) setIssueStats(stats);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentIssueKey, currentUploadedAt]);
 
   useEffect(() => {
     if (newsletterData?.sections?.length > 0) {
@@ -1494,7 +1952,9 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
     try {
       const savedSelectedIds = localStorage.getItem(selectedIdsStorageKey(newsletterData));
       if (!savedSelectedIds) {
-        setSelectedIds(new Set());
+        const recommended = recommendedItemIds(newsletterData);
+        setSelectedIds(new Set(recommended));
+        setPreselectedCount(recommended.length);
         setSelectedIssueKeyLoaded(issueKey);
         return;
       }
@@ -1548,6 +2008,18 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
       stylePreset: config.stylePreset,
     });
     window.print();
+    celebrateBuild("print");
+  }
+
+  function celebrateBuild(kind) {
+    const history = recordBuild(newsletterData);
+    setFinish({ kind, ...buildStreakStats(history) });
+    const uploadedAt = newsletterData?._uploadedAt;
+    setTimeout(() => {
+      fetchIssueStats(uploadedAt).then((stats) => {
+        if (stats) setIssueStats(stats);
+      });
+    }, 2000);
   }
 
   async function handleCopyForEmail() {
@@ -1700,8 +2172,8 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
         zoneUpdates: customWithText.length,
         stylePreset: config.stylePreset,
       });
-      setCopyStatus("Copied. Paste into Gmail or Outlook; use Ctrl+Shift+V for plain text only if needed.");
-      setTimeout(() => setCopyStatus(""), 5000);
+      setCopyStatus("");
+      celebrateBuild("copy");
     } catch (err) {
       trackEvent("copy_for_email_failed", { ...copyEventParams, error_message: err.message });
       setCopyStatus(`Copy failed: ${err.message}`);
@@ -1738,6 +2210,12 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
   const customEntryCount = customEntries.filter(e => e.text).length;
   const totalSelected = visibleSelectedCount + customEntryCount;
   const currentPreset = getNewsletterStylePreset(config.stylePreset);
+  const entriesWithBlanks = customEntries.filter((e) => e.text && entryBlanks(e).length);
+  const entriesFromEarlierIssue = customEntries.filter((e) => isEntryFromEarlierIssue(e, currentIssueKey));
+  const goToZoneUpdates = () => {
+    setStep(1);
+    setActiveSection("custom");
+  };
 
   if (!newsletterData && currentIssueLoading) {
     return (
@@ -1780,6 +2258,18 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
         customEntryCount={customEntryCount}
         draftNotice={draftNotice}
       />
+
+      {welcomeBack ? (
+        <WelcomeBackBanner
+          welcome={welcomeBack}
+          onEditHeader={() => setStep(0)}
+          onReviewUpdates={() => {
+            setActiveSection("custom");
+            setWelcomeBack(null);
+          }}
+          onDismiss={() => setWelcomeBack(null)}
+        />
+      ) : null}
 
       {/* Steps */}
       <div className="nl-step-tabs" role="tablist" aria-label="Newsletter builder steps" style={{ display: "flex", gap: 0, marginBottom: 18, borderBottom: `1px solid ${V.border}` }}>
@@ -1962,6 +2452,22 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
             <p className="nl-step-copy">
               Share your own zone news under Your zone updates, then click any newsletter card to include it.
             </p>
+            {issueStats || preselectedCount > 0 ? (
+              <ul className="nl-step-notes">
+                {issueStats ? (
+                  <li>
+                    {issueStats.captains > 0
+                      ? `👥 ${captainCountLine(issueStats.captains)}`
+                      : "👋 Be the first captain to share this issue!"}
+                  </li>
+                ) : null}
+                {preselectedCount > 0 ? (
+                  <li>
+                    ★ We pre-checked {preselectedCount} {preselectedCount === 1 ? "story" : "stories"} the newsletter team recommends. Uncheck any your neighbors don&apos;t need.
+                  </li>
+                ) : null}
+              </ul>
+            ) : null}
           </div>
           <div className="nl-captain-grid">
             {/* Section nav */}
@@ -2030,7 +2536,12 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, marginBottom: 4 }}>Your zone updates</div>
                   <div style={{ fontSize: 13, color: V.muted, marginBottom: 16 }}>Add local announcements or reminders. These will appear first in your finished newsletter.</div>
-                  <CustomEntryEditor entries={customEntries} onChange={setCustomEntries} />
+                  <CustomEntryEditor
+                    entries={customEntries}
+                    onChange={setCustomEntries}
+                    issueKey={currentIssueKey}
+                    preset={currentPreset}
+                  />
                 </div>
               ) : (() => {
                 const sec = sections.find(s => s.id === activeSection);
@@ -2091,9 +2602,32 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
               <Button variant="secondary" onClick={handlePrint}>Print / Save PDF</Button>
             </div>
             {copyStatus && (
-              <div style={{ flexBasis: "100%", fontSize: 12, color: V.green, fontFamily: V.fontBody }}>{copyStatus}</div>
+              <div style={{ flexBasis: "100%", fontSize: 12, color: V.clay, fontFamily: V.fontBody }}>{copyStatus}</div>
             )}
           </div>
+
+          {entriesWithBlanks.length || entriesFromEarlierIssue.length ? (
+            <div className="nl-presend" role="status">
+              <strong>Before you send:</strong>
+              <ul>
+                {entriesWithBlanks.length ? (
+                  <li>
+                    {entriesWithBlanks.length === 1 ? "1 zone update still has" : `${entriesWithBlanks.length} zone updates still have`} blanks to fill in, like{" "}
+                    <mark className="nl-blank">[{entryBlanks(entriesWithBlanks[0])[0]}]</mark>.{" "}
+                    <button type="button" className="nl-text-btn" onClick={goToZoneUpdates}>Fill them in</button>
+                  </li>
+                ) : null}
+                {entriesFromEarlierIssue.length ? (
+                  <li>
+                    {entriesFromEarlierIssue.length === 1 ? "1 zone update is" : `${entriesFromEarlierIssue.length} zone updates are`} from your last issue.{" "}
+                    <button type="button" className="nl-text-btn" onClick={goToZoneUpdates}>
+                      Check {entriesFromEarlierIssue.length === 1 ? "it's" : "they're"} still current
+                    </button>
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
 
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.65rem 1rem", maxWidth: 720, margin: "0 auto 14px" }}>
             <span style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, letterSpacing: "0.06em", textTransform: "uppercase" }}>
@@ -2135,6 +2669,23 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
           </div>
         </div>
       )}
+
+      {finish ? (
+        <FinishScreen
+          finish={finish}
+          config={config}
+          storyCount={visibleSelectedCount}
+          updateCount={customEntryCount}
+          issueStats={issueStats}
+          onClose={() => setFinish(null)}
+          onRepeat={() => {
+            const kind = finish.kind;
+            setFinish(null);
+            if (kind === "copy") handleCopyForEmail();
+            else handlePrint();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

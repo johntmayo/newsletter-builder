@@ -58,6 +58,8 @@ pages/
     verify-admin.js     — POST: check admin password
     publish-newsletter.js — POST: write parsed issue to Redis when admin explicitly publishes (admin password)
     save-issue.js       — POST: save issue after structure edits (admin password)
+    track-usage.js      — POST: best-effort copy/print usage log
+    issue-stats.js      — GET: aggregate "captains who shared this issue" counts
 lib/
   parseNewsletterHtml.js   — Section/item extraction from HTML
   sanitizeMailerLiteHtml.js — HTML cleanup for display / email
@@ -100,7 +102,7 @@ Set on **Vercel** (Production / Preview as needed) and in **`.env.local`** for l
    - After **Parse newsletter**, the parsed JSON lives in React state until **Publish** or **Discard draft**. Captains and `/api/current-issue` keep showing the **previous live** issue until publish.
 
 4. **Captain config** (name, zone, captains, zone links, header image, custom entries, selections)  
-   - **Not** persisted to the server today — lives in React state for the session only.
+   - **Not** persisted to the server. Saved per browser in `localStorage`: `altagether_captain_config`, `altagether_custom_entries` (carry over between issues; each entry's `issueKey` records the issue it was last written or confirmed for), `altagether_selected_ids_<issue>` (per issue), `altagether_builder_state` (`step`, `activeSection`, and the `issueKey` they belong to), and `altagether_build_history` (issues this browser has copied or printed, used for streaks).
 
 ---
 
@@ -113,6 +115,8 @@ Set on **Vercel** (Production / Preview as needed) and in **`.env.local`** for l
 | `/api/verify-admin` | POST | Body password | Validates `NEWSLETTER_ADMIN_PASSWORD` |
 | `/api/publish-newsletter` | POST | Body password | Body `{ parsed }` — saves that JSON to Redis when admin clicks **Publish for all visitors** |
 | `/api/save-issue` | POST | Body password | Upserts full issue JSON (e.g. after structure edits); sets `_structureEditedAt` |
+| `/api/track-usage` | POST | None | Best-effort log of captain copy/print events (event, zone, counts) to Redis |
+| `/api/issue-stats` | GET | None | Aggregate counts for the current issue: `{ captains, builds, uploadedAt }`. Counts copy/print events since the issue's `_uploadedAt`; `captains` is distinct zone names. Cached 30s at the edge |
 
 All Redis writes happen only inside server-side API routes.
 
@@ -138,10 +142,15 @@ The parser (`lib/parseNewsletterHtml.js`) targets **MailerLite-style** exports a
 ## Captain flow (high level)
 
 1. **Make it yours** — Style preset (Newsprint / Modern) and optional header photo from the curated library first, then newsletter name, tagline, zone, one or more **Captain / How to contact** rows (+ add captain), and optional zone links (websites/social — **shown in output with no label**). A sticky live preview of the masthead (`NewsletterMasthead`, shared with the full preview) updates as they type.  
-2. **Select content** — **Your zone updates** sits at the top of the section rail, then the master newsletter sections; toggles selection by item `id`. Items with `_adminHidden` are hidden. Zone update text auto-links bare web addresses; `[words](url)` still works for custom link text.  
-3. **Preview & print** — Composes header, optional zone-specific updates block (**one** section title: `{zone} Updates` or fallback), then selected master items. **Print** uses `#print-root` and injected print CSS so the header stays legible when backgrounds are not printed (dark text on white in `@media print`).
+2. **Select content** — **Your zone updates** sits at the top of the section rail, then the master newsletter sections; toggles selection by item `id`. Items with `_adminHidden` are hidden. Items with `_adminRecommended` show a "★ Recommended" tag and are pre-checked when the captain has no saved selection for that issue. Zone update text auto-links bare web addresses; `[words](url)` still works for custom link text.  
+   - **Zone update editor:** starter templates (block meeting, welcome neighbors, thank-you, local event, blank) fill in text with `[blanks]`. Any `[text]` *not* followed by `(url)` counts as a blank: it's highlighted, listed as "Fill in" chips that select it, and flagged on step 3. Each update has a side-by-side "How it will look" preview. Updates whose `issueKey` isn't the current issue show "From your last issue. Still current?" (Keep it / Remove); editing also confirms them. They're still included in output until removed.
+   - A small note shows how many captains have shared this issue (from `/api/issue-stats`; hidden if unavailable).
+3. **Preview & print** — Composes header, optional zone-specific updates block (**one** section title: `{zone} Updates` or fallback), then selected master items. A "Before you send" box flags unfilled blanks and updates from an earlier issue. **Print** uses `#print-root` and injected print CSS so the header stays legible when backgrounds are not printed (dark text on white in `@media print`).
+4. **Finish screen** — After a successful copy or print, a dialog shows "Your {zone} newsletter is ready!", a story/update summary, the captain's streak (from `altagether_build_history`; consecutive if the issue date matches the previous issue's "next issue" date within 4 days, or is within 21 days of it), the shared-by count, and a next-steps checklist (copy: paste, subject line, BCC, send; print: save/share/hand out).
 
 **Copy for email** builds multipart HTML + plain text with the same structural choices as preview.
+
+**Returning captains:** If the saved builder state is for the current issue, the captain resumes where they left off. If it's a new issue and they have a saved zone or newsletter name, they skip setup and land on **Select content** with a "Welcome back" banner; a non-empty newsletter date is refreshed to today, and carried-over zone updates get a "check they're still current" link. First-time visitors start on step 1.
 
 ---
 
@@ -156,6 +165,8 @@ The parser (`lib/parseNewsletterHtml.js`) targets **MailerLite-style** exports a
 4. **Publish** — On **Upload issue**, **Publish for all visitors** (`/api/publish-newsletter`) writes the draft to Redis and refreshes client cache (`localStorage`). **Discard draft** drops the draft without changing the live issue.
 
 5. **Review structure** (already-live issue) — When there is **no** unpublished draft, this tab edits what everyone sees. **Save structure for everyone** → `/api/save-issue` (same as before).
+
+6. **Recommend stories** — In Review structure, **☆ Recommend** marks an item `_adminRecommended: true` (gold border). Captains see a "★ Recommended" tag, and recommended items are pre-checked for captains who haven't opened this issue yet. Recommend *before* publishing for the biggest effect: captains who already opened the issue keep their own selection. Merging keeps the flag if either item had it; splitting clears it.
 
 Tabs stay mounted when switching so in-progress edits on the review UI are not lost.
 
@@ -179,6 +190,7 @@ Tabs stay mounted when switching so in-progress edits on the review UI are not l
 - **Zone updates** use a **single** auto section title (`{zone} Updates`) with per-entry optional **title line** + body; avoids multiple fake “section” headings in preview/PDF/email.  
 - **Captain contact** is **multiple rows** (name + how to contact), rendered as reader-facing lines like `Name — contact` in the header band.  
 - **Print/PDF:** Header band gets print-specific overrides so tagline and meta are not illegible light gray when backgrounds don’t print.
+- **Social proof is aggregate only.** Usage events don't record which issue they were for, so `/api/issue-stats` counts events since the current issue's upload time and reports distinct zone names as "captains" (two spellings of one zone count twice; blank zones aren't counted). No names or zones are sent to the browser.
 - **Header images** are a curated library, not captain uploads: uploaded images were data URLs, which Gmail/Outlook strip from pasted HTML. To add one, save a 1440×480 JPEG (~250 KB max) to `public/images/headers/`, a 480×160 copy to `public/images/headers/thumbs/`, and an entry with alt text in `lib/headerImages.js`. Email copy links images by absolute URL from the current site origin, so copies made from localhost or protected preview deployments won’t show the image to recipients.
 
 ---
@@ -214,7 +226,7 @@ Use before shipping to confirm production compile.
 ## Known gaps / follow-ups
 
 - **`newsletter-builder.jsx`** is not kept in sync with `pages/index.js` (older captain-only flow). Prefer the Next app for all work.  
-- Captain **configuration and selections** are not persisted server-side; refreshing loses work (by design unless you add persistence later).  
+- Captain **configuration and selections** are not persisted server-side; they live in the captain's browser, so switching devices or clearing browser data starts fresh (by design unless you add persistence later).  
 - Parser will never be perfect for all MailerLite variants; keep **Review structure** as the escape hatch. See [`docs/PARSING_PROBLEM_AGENT_PROMPT.md`](docs/PARSING_PROBLEM_AGENT_PROMPT.md) for a shareable problem statement when iterating on parsing or normalization.
 
 ---

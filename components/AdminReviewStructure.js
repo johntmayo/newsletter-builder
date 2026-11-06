@@ -7,6 +7,7 @@ import {
   splitItemInSection,
   splitPointCount,
   toggleItemHidden,
+  toggleItemRecommended,
 } from "../lib/issueStructure";
 
 function displayText(value) {
@@ -122,6 +123,11 @@ export default function AdminReviewStructure({
     setSaving(false);
   }
 
+  const recommendedCount = draft.sections.reduce(
+    (n, sec) => n + (sec.items || []).filter((it) => it._adminRecommended && !it._adminHidden).length,
+    0,
+  );
+
   function applyDraft(next) {
     setDraft(next);
     setSaveStatus("");
@@ -139,6 +145,10 @@ export default function AdminReviewStructure({
             {draftOnlyMode
               ? "Merge or split items as needed. This is a private draft until you publish from the Upload issue tab."
               : "Merge items that were split incorrectly, or split an item that was merged with the next story. Changes are not public until you save."}
+          </div>
+          <div style={{ fontSize: 13, color: V.muted, marginTop: 6, maxWidth: 520 }}>
+            <strong style={{ color: V.ink }}>★ Recommend</strong> the stories every zone should include. Captains see them tagged, and they&apos;re pre-checked for captains who haven&apos;t started this issue yet.
+            {recommendedCount > 0 ? ` ${recommendedCount} recommended so far.` : ""}
           </div>
         </div>
         <Button onClick={handleSave} disabled={saving}>
@@ -190,11 +200,12 @@ export default function AdminReviewStructure({
                 const splits = splitPointCount(item.bodyHtml);
                 const canSplit = splits > 0;
                 const hidden = Boolean(item._adminHidden);
+                const recommended = Boolean(item._adminRecommended) && !hidden;
                 return (
                   <div
                     key={displayText(item.id) || `${sIdx}-${iIdx}`}
                     style={{
-                      border: `2px solid ${hidden ? `${V.muted}66` : V.border}`,
+                      border: `2px solid ${hidden ? `${V.muted}66` : recommended ? V.gold : V.border}`,
                       borderRadius: 8,
                       background: hidden ? "rgba(148, 163, 184, 0.12)" : V.inputBg,
                       boxShadow: hidden ? "none" : V.cardShadow,
@@ -240,6 +251,22 @@ export default function AdminReviewStructure({
                           Hide card
                         </Button>
                       )}
+                      {!hidden ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => applyDraft(toggleItemRecommended(draft, sIdx, iIdx))}
+                          style={{
+                            fontSize: 11,
+                            padding: "6px 10px",
+                            ...(recommended
+                              ? { background: V.gold, borderColor: V.gold, color: V.ink }
+                              : { borderColor: V.gold, color: V.ink }),
+                          }}
+                        >
+                          {recommended ? "★ Recommended" : "☆ Recommend"}
+                        </Button>
+                      ) : null}
                       <div style={{ flex: "1 1 120px" }} />
                       {canSplit ? (
                         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: V.muted, fontFamily: V.fontBody }}>
