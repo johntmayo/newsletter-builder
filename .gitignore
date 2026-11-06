@@ -16,6 +16,9 @@ samples/*_files/
 test_exports/
 test-exports/
 
+# Full-resolution header photo originals; only the processed copies in public/images/headers/ ship
+public/images/header-originals/
+
 # misc
 .DS_Store
 *.pem

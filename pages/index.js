@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import AdminReviewStructure from "../components/AdminReviewStructure";
 import { repairLegacyAmpDoubling } from "../lib/sanitizeMailerLiteHtml";
 import { trackEvent, logUsage } from "../lib/analytics";
+import { HEADER_IMAGES, HEADER_IMAGE_WIDTH, HEADER_IMAGE_HEIGHT, getHeaderImage } from "../lib/headerImages";
 
 // ── Design tokens (CSS vars — see styles/globals.css & altagether-subpage-style.md)
 const STORAGE_KEY = "altagether_newsletter_data";
@@ -19,6 +20,7 @@ const DEFAULT_CAPTAIN_CONFIG = {
   captains: [{ id: "c1", name: "", contact: "" }],
   zoneLinks: "",
   stylePreset: "editorial",
+  headerImageId: "",
 };
 
 const V = {
@@ -258,23 +260,31 @@ function parseCustomUpdateText(text) {
   const linkPattern = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
   let cursor = 0;
   let match;
+  const pushText = (chunk) => {
+    for (const part of parseAutoLinkText(chunk)) {
+      parts.push(part.type === "link" ? { ...part, bare: true } : part);
+    }
+  };
 
   while ((match = linkPattern.exec(source)) !== null) {
     const [raw, label, hrefRaw] = match;
     const href = safeCustomLinkHref(hrefRaw);
     if (!href) continue;
-    if (match.index > cursor) parts.push({ type: "text", text: source.slice(cursor, match.index) });
+    if (match.index > cursor) pushText(source.slice(cursor, match.index));
     parts.push({ type: "link", label, href });
     cursor = match.index + raw.length;
   }
 
-  if (cursor < source.length) parts.push({ type: "text", text: source.slice(cursor) });
+  if (cursor < source.length) pushText(source.slice(cursor));
   return parts.length ? parts : [{ type: "text", text: source }];
 }
 
 function customUpdateTextToPlain(text) {
   return parseCustomUpdateText(text)
-    .map((part) => (part.type === "link" ? `${part.label} (${part.href})` : part.text))
+    .map((part) => {
+      if (part.type !== "link") return part.text;
+      return part.bare ? part.label : `${part.label} (${part.href.replace(/^mailto:/, "")})`;
+    })
     .join("");
 }
 
@@ -508,6 +518,7 @@ function injectPrintStyles() {
         padding-left: 1.2em !important;
       }
       #print-root .nl-item-body li { margin: 0.12em 0 !important; }
+      #print-root .nl-print-header-image { break-inside: avoid; }
       /* PDF / print: use a white masthead so it survives printers that skip background graphics. */
       #print-root .nl-print-header {
         background: #fff !important;
@@ -996,9 +1007,9 @@ function CustomEntryEditor({ entries, onChange }) {
             style={{ width: "100%", padding: "8px 12px", border: `2px solid ${V.border}`, borderRadius: 8, fontSize: 13, fontFamily: V.fontBody, resize: "vertical", boxSizing: "border-box", background: V.card, lineHeight: 1.6 }}
           />
           <div style={{ marginTop: 5, fontSize: 11, color: V.muted, lineHeight: 1.45 }}>
-            <strong>To add a link:</strong> put the clickable words in brackets and the web address in parentheses.
+            <strong>Links:</strong> paste a web address and it becomes clickable.
             <br />
-            Example: <code>[Register here](altagether.org)</code>
+            To link your own words instead, use <code>[Register here](altagether.org)</code>
           </div>
           <div style={{ textAlign: "right", marginTop: 6 }}>
             <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "5px 12px", fontSize: 11 }}>Remove</Button>
@@ -1089,6 +1100,69 @@ function StylePresetChooser({ value, onChange }) {
   );
 }
 
+function HeaderImagePicker({ value, onChange }) {
+  const tileStyle = (selected) => ({
+    position: "relative",
+    padding: 0,
+    overflow: "hidden",
+    background: V.card,
+    border: `2px solid ${selected ? V.green : V.border}`,
+    borderRadius: 8,
+    boxShadow: selected ? `0 0 0 2px ${V.gold}` : V.cardShadow,
+    cursor: "pointer",
+    aspectRatio: "3 / 1",
+  });
+  const selectedBadge = (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        top: 6,
+        right: 6,
+        background: V.green,
+        color: "#fff",
+        borderRadius: 999,
+        padding: "2px 8px",
+        fontFamily: V.fontDisplay,
+        fontSize: 10,
+        fontWeight: 800,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+      }}
+    >
+      ✓ Selected
+    </span>
+  );
+
+  return (
+    <div className="nl-header-grid" role="radiogroup" aria-label="Header photo">
+      {HEADER_IMAGES.map((img) => {
+        const selected = value === img.id;
+        return (
+          <button
+            key={img.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={img.alt}
+            title={selected ? `${img.alt} (click again to remove)` : img.alt}
+            onClick={() => onChange(selected ? "" : img.id)}
+            style={tileStyle(selected)}
+          >
+            <img
+              src={img.thumb}
+              alt=""
+              loading="lazy"
+              style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+            />
+            {selected ? selectedBadge : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function BuilderStatus({ config, preset, visibleSelectedCount, customEntryCount, draftNotice }) {
   const title = (config.name || config.zone || "Your neighborhood newsletter").trim();
   const totalSelected = visibleSelectedCount + customEntryCount;
@@ -1110,16 +1184,102 @@ function BuilderStatus({ config, preset, visibleSelectedCount, customEntryCount,
 }
 
 // ── Preview / Print output ─────────────────────────────────────────────────────
-function NewsletterPreview({ config, newsletterData, selectedIds, customEntries }) {
+/** Header image + title band + zone links strip; shared by the live setup preview and the full newsletter. */
+function NewsletterMasthead({ config }) {
   const { name, tagline, issueDate, zone, zoneLinks, captains } = config;
   const date = (issueDate || "").trim();
   const captainLines = captainsWithContent(captains);
   const zl = (zoneLinks || "").trim();
-  const hasLinksStrip = Boolean(zl);
   const preset = getNewsletterStylePreset(config.stylePreset);
+  const headerImage = getHeaderImage(config.headerImageId);
   const clean = preset.id === "clean";
   const headerText = clean ? V.navy : V.ink;
   const headerTitleFont = clean ? V.fontDisplay : preset.bodyFont;
+
+  return (
+    <>
+      {headerImage ? (
+        <img
+          className="nl-print-header-image"
+          src={headerImage.src}
+          alt={headerImage.alt}
+          width={HEADER_IMAGE_WIDTH}
+          height={HEADER_IMAGE_HEIGHT}
+          style={{ display: "block", width: "100%", height: "auto" }}
+        />
+      ) : null}
+      <div
+        className="nl-print-header"
+        style={{
+          background: V.card,
+          padding: "24px 32px",
+          color: headerText,
+          borderTop: clean ? "none" : `6px solid ${V.navy}`,
+          borderBottom: clean ? `4px solid ${V.gold}` : `3px solid ${V.navy}`,
+        }}
+      >
+        <div className="nl-print-header-title" style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.02em", fontFamily: headerTitleFont }}>{name || "Zone Newsletter"}</div>
+        {tagline && (
+          <div className="nl-print-header-tagline" style={{ fontSize: 14, opacity: clean ? 0.82 : 0.92, marginTop: 4 }}>
+            {tagline}
+          </div>
+        )}
+        {(date || zone) ? (
+          <div className="nl-print-header-meta" style={{ fontSize: 12, opacity: clean ? 0.78 : 0.88, marginTop: 8 }}>
+            {[date, zone].filter(Boolean).join(" • ")}
+          </div>
+        ) : null}
+        {captainLines.length > 0 ? (
+          <div
+            className="nl-print-header-captains"
+            style={{ marginTop: 10, fontSize: 12.5, opacity: clean ? 0.86 : 0.92, lineHeight: 1.5, fontFamily: preset.bodyFont }}
+          >
+            {captainLines.map((c, i) => (
+              <div key={c.id || i}>{formatCaptainLine(c)}</div>
+            ))}
+          </div>
+        ) : null}
+        <div
+          className="nl-print-header-curated nl-print-header-rule"
+          style={{
+            marginTop: 12,
+            fontSize: 12,
+            opacity: clean ? 0.76 : 0.88,
+            borderTop: `1px solid ${V.border}`,
+            paddingTop: 10,
+          }}
+        >
+          Curated from the{" "}
+          <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: headerText, textDecoration: "underline", fontWeight: 700 }}>
+            Altagether Neighborhood Captain Newsletter
+          </a>
+        </div>
+      </div>
+
+      {zl ? (
+        <div
+          className="nl-print-contact"
+          style={{
+            padding: "18px 32px",
+            background: V.inputBg,
+            borderBottom: `1px solid ${V.border}`,
+            fontFamily: preset.bodyFont,
+            fontSize: 13,
+            lineHeight: 1.55,
+            color: V.ink,
+          }}
+        >
+          <AutoLinkedText text={zl} color={V.green} />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function NewsletterPreview({ config, newsletterData, selectedIds, customEntries }) {
+  const { name, zone } = config;
+  const preset = getNewsletterStylePreset(config.stylePreset);
+  const clean = preset.id === "clean";
   const sectionHeadingStyle = (color) => clean
     ? {
         fontSize: 14,
@@ -1163,70 +1323,7 @@ function NewsletterPreview({ config, newsletterData, selectedIds, customEntries 
 
   return (
     <div style={{ fontFamily: preset.bodyFont, color: V.ink, background: V.card, maxWidth: 720, margin: "0 auto" }}>
-      <div
-        className="nl-print-header"
-        style={{
-          background: V.card,
-          padding: "24px 32px",
-          color: headerText,
-          borderTop: clean ? "none" : `6px solid ${V.navy}`,
-          borderBottom: clean ? `4px solid ${V.gold}` : `3px solid ${V.navy}`,
-        }}
-      >
-        <div className="nl-print-header-title" style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.02em", fontFamily: headerTitleFont }}>{name || "Zone Newsletter"}</div>
-        {tagline && (
-          <div className="nl-print-header-tagline" style={{ fontSize: 14, opacity: clean ? 0.82 : 0.92, marginTop: 4 }}>
-            {tagline}
-          </div>
-        )}
-        {(date || zone) ? (
-          <div className="nl-print-header-meta" style={{ fontSize: 12, opacity: clean ? 0.78 : 0.88, marginTop: 8 }}>
-            {[date, zone].filter(Boolean).join(" • ")}
-          </div>
-        ) : null}
-        {captainLines.length > 0 ? (
-          <div
-            className="nl-print-header-captains"
-            style={{ marginTop: 10, fontSize: 12.5, opacity: clean ? 0.86 : 0.92, lineHeight: 1.5, fontFamily: preset.bodyFont }}
-          >
-            {captainLines.map((c, i) => (
-              <div key={c.id || i}>{formatCaptainLine(c)}</div>
-            ))}
-          </div>
-        ) : null}
-        <div
-          className="nl-print-header-curated nl-print-header-rule"
-          style={{
-            marginTop: 12,
-            fontSize: 12,
-            opacity: clean ? 0.76 : 0.88,
-            borderTop: clean ? `1px solid ${V.border}` : `1px solid ${V.border}`,
-            paddingTop: 10,
-          }}
-        >
-          Curated from the{" "}
-          <a href={FULL_NEWSLETTER_URL} target="_blank" rel="noopener noreferrer" style={{ color: headerText, textDecoration: "underline", fontWeight: 700 }}>
-            Altagether Neighborhood Captain Newsletter
-          </a>
-        </div>
-      </div>
-
-      {hasLinksStrip ? (
-        <div
-          className="nl-print-contact"
-          style={{
-            padding: "18px 32px",
-            background: V.inputBg,
-            borderBottom: `1px solid ${V.border}`,
-            fontFamily: preset.bodyFont,
-            fontSize: 13,
-            lineHeight: 1.55,
-            color: V.ink,
-          }}
-        >
-          <AutoLinkedText text={zl} color={V.green} />
-        </div>
-      ) : null}
+      <NewsletterMasthead config={config} />
 
       <div style={{ padding: "0 32px 32px" }}>
         {/* Zone updates: one section title, entries styled like newsletter item cards */}
@@ -1317,6 +1414,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
               ? parsed.captains
               : DEFAULT_CAPTAIN_CONFIG.captains,
             stylePreset: getNewsletterStylePreset(parsed.stylePreset).id,
+            headerImageId: getHeaderImage(parsed.headerImageId)?.id || "",
           });
           restored = true;
         }
@@ -1440,6 +1538,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
       items_selected: visibleSelectedCount,
       zone_updates: customEntryCount,
       style_preset: config.stylePreset,
+      header_image: config.headerImageId || "(none)",
       zone: config.zone || "(none)",
     });
     logUsage("print_newsletter", {
@@ -1476,6 +1575,14 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
     plainParts.push("");
 
     htmlParts.push(`<div style="font-family:${preset.emailFontFamily};font-size:14px;line-height:${clean ? "1.5" : "1.55"};color:#1f2937;">`);
+    const headerImage = getHeaderImage(config.headerImageId);
+    if (headerImage) {
+      // Email clients can't load relative or data: URLs; Outlook desktop also ignores CSS width, hence the attribute.
+      const imageUrl = new URL(headerImage.src, window.location.origin).href;
+      htmlParts.push(
+        `<img src="${escapeHtmlAttr(imageUrl)}" alt="${escapeHtmlAttr(headerImage.alt)}" width="600" style="display:block;width:100%;max-width:720px;height:auto;border:0;margin:0 0 4px;" />`,
+      );
+    }
     htmlParts.push(
       `<div style="border-top:4px solid ${clean ? "#f59e0b" : "#314059"};border-bottom:1px solid #d1d5db;padding:12px 0 10px;margin:0 0 14px;">`,
     );
@@ -1570,6 +1677,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
       items_selected: visibleSelectedCount,
       zone_updates: customWithText.length,
       style_preset: config.stylePreset,
+      header_image: config.headerImageId || "(none)",
       zone: config.zone || "(none)",
     };
     try {
@@ -1658,9 +1766,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
   const activeSectionIndex = sections.findIndex((s) => s.id === activeSection);
   const activeIsNewsletterSection = activeSectionIndex >= 0;
   const hasNextNewsletterSection = activeIsNewsletterSection && activeSectionIndex < sections.length - 1;
-  const sectionProgressLabel = activeIsNewsletterSection
-    ? `Section ${activeSectionIndex + 1} of ${sections.length}`
-    : "Zone updates";
+  const sectionProgressLabel = `Section ${activeSectionIndex + 1} of ${sections.length}`;
   const goToNextNewsletterSection = () => {
     if (hasNextNewsletterSection) setActiveSection(sections[activeSectionIndex + 1].id);
   };
@@ -1677,7 +1783,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
 
       {/* Steps */}
       <div className="nl-step-tabs" role="tablist" aria-label="Newsletter builder steps" style={{ display: "flex", gap: 0, marginBottom: 18, borderBottom: `1px solid ${V.border}` }}>
-        {["Configure", "Select Content", "Preview & Publish"].map((label, i) => (
+        {["Make It Yours", "Select Content", "Preview & Publish"].map((label, i) => (
           <button
             type="button"
             role="tab"
@@ -1708,13 +1814,38 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
         <>
           <div className="nl-step-header">
             <div className="nl-step-kicker">Step 1 of 3</div>
-            <h2 className="nl-step-title">Set up your newsletter</h2>
+            <h2 className="nl-step-title">Make it yours</h2>
             <p className="nl-step-copy">
-              Add the title, date, and contact details that should appear at the top of your neighborhood version.
+              Pick a look, add your details, and watch the top of your newsletter come together. Everything is saved in this browser, so next time it&apos;s ready to go.
             </p>
           </div>
 
-          <div style={{ maxWidth: 680, margin: "0 auto" }}>
+          <div className="nl-setup-grid">
+          <div className="nl-setup-form">
+            <div className="nl-setup-group-title">Style</div>
+            <div style={{ marginBottom: 20 }}>
+              <StylePresetChooser
+                value={currentPreset.id}
+                onChange={(presetId) => updateConfig("stylePreset", presetId)}
+              />
+            </div>
+
+            <div className="nl-setup-group-title" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+              <span>Header photo (optional)</span>
+              {config.headerImageId ? (
+                <button type="button" className="nl-text-btn" onClick={() => updateConfig("headerImageId", "")}>
+                  Remove photo
+                </button>
+              ) : null}
+            </div>
+            <div style={{ marginBottom: 28 }}>
+              <HeaderImagePicker
+                value={config.headerImageId}
+                onChange={(id) => updateConfig("headerImageId", id)}
+              />
+            </div>
+
+            <div className="nl-setup-group-title">Your details</div>
             {[
               { field: "name", label: "Newsletter Name", placeholder: "e.g. Zone 4 Neighbor Update" },
               { field: "tagline", label: "Tagline (optional)", placeholder: "e.g. News for Loma Alta neighbors" },
@@ -1798,6 +1929,27 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
               Next: Select Content →
             </Button>
           </div>
+
+          <aside className="nl-setup-preview" aria-label="Live preview of your newsletter header">
+            <div className="nl-step-kicker" style={{ color: V.muted }}>Live preview</div>
+            <div
+              style={{
+                border: `2px solid ${V.border}`,
+                borderRadius: 8,
+                boxShadow: V.cardShadow,
+                overflow: "hidden",
+                background: V.card,
+                fontFamily: currentPreset.bodyFont,
+                color: V.ink,
+              }}
+            >
+              <NewsletterMasthead config={config} />
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: V.muted, lineHeight: 1.5 }}>
+              The top of your newsletter. Your zone updates and the stories you pick come next.
+            </div>
+          </aside>
+          </div>
         </>
       )}
 
@@ -1808,13 +1960,34 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
             <div className="nl-step-kicker">Step 2 of 3</div>
             <h2 className="nl-step-title">Choose updates for your neighborhood</h2>
             <p className="nl-step-copy">
-              Click any card to include it. Use the section list to move through the newsletter, then add your own zone updates if needed.
+              Share your own zone news under Your zone updates, then click any newsletter card to include it.
             </p>
           </div>
           <div className="nl-captain-grid">
             {/* Section nav */}
             <div className="nl-section-rail" style={{ background: V.card, border: `2px solid ${V.border}`, borderRadius: 8, boxShadow: V.cardShadow, overflow: "hidden", alignSelf: "start", position: "sticky", top: 20 }}>
-              <div style={{ padding: "12px 16px", background: V.border, fontSize: 11, fontWeight: 800, fontFamily: V.fontDisplay, color: V.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Sections</div>
+              <button
+                type="button"
+                onClick={() => setActiveSection("custom")}
+                style={{
+                  padding: "12px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
+                  background: activeSection === "custom" ? V.clayTint : "rgba(188, 88, 56, 0.05)",
+                  borderLeft: `3px solid ${activeSection === "custom" ? V.clay : "transparent"}`,
+                  color: V.clay, fontWeight: 700,
+                  borderTop: "none",
+                  borderRight: "none",
+                  borderBottom: `1px solid ${V.border}`,
+                  width: "100%",
+                  textAlign: "left",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                }}
+              >
+                <span>✎ Your zone updates</span>
+                {customEntryCount > 0 && (
+                  <span style={{ background: V.clay, color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10, fontWeight: 800 }}>{customEntryCount}</span>
+                )}
+              </button>
+              <div style={{ padding: "12px 16px", background: V.border, fontSize: 11, fontWeight: 800, fontFamily: V.fontDisplay, color: V.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Newsletter sections</div>
               {sections.map(sec => {
                 const color = getSectionColor(sec.heading);
                 const count = captainVisibleItems(sec.items).filter((i) => selectedIds.has(i.id)).length;
@@ -1843,34 +2016,19 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
                   </button>
                 );
               })}
-              <button
-                type="button"
-                onClick={() => setActiveSection("custom")}
-                style={{
-                  padding: "10px 16px", cursor: "pointer", fontSize: 12, fontFamily: V.fontDisplay,
-                  background: activeSection === "custom" ? V.clayTint : "transparent",
-                  borderLeft: `3px solid ${activeSection === "custom" ? V.clay : "transparent"}`,
-                  color: activeSection === "custom" ? V.clay : V.ink, fontWeight: activeSection === "custom" ? 700 : 400,
-                  borderTop: `1px solid ${V.border}`, marginTop: 4,
-                  borderRight: "none",
-                  borderBottom: "none",
-                  width: "100%",
-                  textAlign: "left",
-                }}
-              >
-                + Zone Updates
-              </button>
             </div>
 
             {/* Items panel */}
             <div>
-              <div style={{ fontSize: 13, color: V.muted, marginBottom: 16, lineHeight: 1.55 }}>
-                <strong style={{ color: V.ink }}>{sectionProgressLabel}.</strong>{" "}
-                Pick the items your neighbors need most.
-              </div>
+              {activeIsNewsletterSection ? (
+                <div style={{ fontSize: 13, color: V.muted, marginBottom: 16, lineHeight: 1.55 }}>
+                  <strong style={{ color: V.ink }}>{sectionProgressLabel}.</strong>{" "}
+                  Pick the items your neighbors need most.
+                </div>
+              ) : null}
               {activeSection === "custom" ? (
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, marginBottom: 4 }}>Zone updates</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, fontFamily: V.fontDisplay, color: V.clay, marginBottom: 4 }}>Your zone updates</div>
                   <div style={{ fontSize: 13, color: V.muted, marginBottom: 16 }}>Add local announcements or reminders. These will appear first in your finished newsletter.</div>
                   <CustomEntryEditor entries={customEntries} onChange={setCustomEntries} />
                 </div>
@@ -1900,7 +2058,9 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
 
               <div className="nl-step-toolbar" style={{ justifyContent: "flex-end", marginTop: 24, paddingTop: 16, borderTop: `1px solid ${V.border}` }}>
                 <Button variant="secondary" onClick={() => setStep(0)}>← Back</Button>
-                {hasNextNewsletterSection ? (
+                {activeSection === "custom" && sections.length > 0 ? (
+                  <Button onClick={() => setActiveSection(sections[0].id)}>Next: Newsletter sections →</Button>
+                ) : hasNextNewsletterSection ? (
                   <Button onClick={goToNextNewsletterSection}>Next Section ({activeSectionIndex + 2} of {sections.length}) →</Button>
                 ) : (
                   <Button onClick={() => setStep(2)}>Preview & Publish →</Button>
@@ -1919,7 +2079,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
               <div className="nl-step-kicker">Step 3 of 3</div>
               <h2 className="nl-step-title">Preview and share</h2>
               <p className="nl-step-copy">
-                Review your newsletter, choose a style, then copy it into email or save it as a PDF.
+                Review your newsletter, then copy it into email or save it as a PDF.
               </p>
               <div style={{ marginTop: 8, color: V.muted, fontSize: 12 }}>
                 {visibleSelectedCount} newsletter {visibleSelectedCount === 1 ? "item" : "items"} selected · {customEntryCount} zone {customEntryCount === 1 ? "update" : "updates"} added
@@ -1935,17 +2095,25 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
             )}
           </div>
 
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, marginBottom: 5, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Choose a style
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.65rem 1rem", maxWidth: 720, margin: "0 auto 14px" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: V.fontDisplay, color: V.ink, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Style
+            </span>
+            <div className="nl-segmented" role="group" aria-label="Newsletter style">
+              {Object.values(NEWSLETTER_STYLE_PRESETS).map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={currentPreset.id === p.id}
+                  onClick={() => updateConfig("stylePreset", p.id)}
+                >
+                  {p.shortLabel}
+                </button>
+              ))}
             </div>
-            <div style={{ fontSize: 12, color: V.muted, lineHeight: 1.5, marginBottom: 10 }}>
-              Choose the format before copying to email or printing to PDF.
-            </div>
-            <StylePresetChooser
-              value={currentPreset.id}
-              onChange={(presetId) => updateConfig("stylePreset", presetId)}
-            />
+            <button type="button" className="nl-text-btn" onClick={() => setStep(0)}>
+              {config.headerImageId ? "Change header photo" : "Add a header photo"}
+            </button>
           </div>
 
           <div

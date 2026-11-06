@@ -62,6 +62,7 @@ lib/
   parseNewsletterHtml.js   — Section/item extraction from HTML
   sanitizeMailerLiteHtml.js — HTML cleanup for display / email
   issueStructure.js        — Merge / split / hide item helpers + renumber IDs
+  headerImages.js          — Curated captain header images (id + alt text); files live in public/images/headers/
   newsletterStorage.js     — Server Redis storage helper
   newsletterAdminAuth.js — Admin password check (env + dev fallback)
 components/
@@ -136,8 +137,8 @@ The parser (`lib/parseNewsletterHtml.js`) targets **MailerLite-style** exports a
 
 ## Captain flow (high level)
 
-1. **Configure** — Newsletter name, tagline, zone, one or more **Captain / How to contact** rows (+ add captain), optional zone links (websites/social — **shown in output with no label**), optional header image.  
-2. **Select content** — By section; toggles selection by item `id`. Items with `_adminHidden` are hidden.  
+1. **Make it yours** — Style preset (Newsprint / Modern) and optional header photo from the curated library first, then newsletter name, tagline, zone, one or more **Captain / How to contact** rows (+ add captain), and optional zone links (websites/social — **shown in output with no label**). A sticky live preview of the masthead (`NewsletterMasthead`, shared with the full preview) updates as they type.  
+2. **Select content** — **Your zone updates** sits at the top of the section rail, then the master newsletter sections; toggles selection by item `id`. Items with `_adminHidden` are hidden. Zone update text auto-links bare web addresses; `[words](url)` still works for custom link text.  
 3. **Preview & print** — Composes header, optional zone-specific updates block (**one** section title: `{zone} Updates` or fallback), then selected master items. **Print** uses `#print-root` and injected print CSS so the header stays legible when backgrounds are not printed (dark text on white in `@media print`).
 
 **Copy for email** builds multipart HTML + plain text with the same structural choices as preview.
@@ -178,6 +179,7 @@ Tabs stay mounted when switching so in-progress edits on the review UI are not l
 - **Zone updates** use a **single** auto section title (`{zone} Updates`) with per-entry optional **title line** + body; avoids multiple fake “section” headings in preview/PDF/email.  
 - **Captain contact** is **multiple rows** (name + how to contact), rendered as reader-facing lines like `Name — contact` in the header band.  
 - **Print/PDF:** Header band gets print-specific overrides so tagline and meta are not illegible light gray when backgrounds don’t print.
+- **Header images** are a curated library, not captain uploads: uploaded images were data URLs, which Gmail/Outlook strip from pasted HTML. To add one, save a 1440×480 JPEG (~250 KB max) to `public/images/headers/`, a 480×160 copy to `public/images/headers/thumbs/`, and an entry with alt text in `lib/headerImages.js`. Email copy links images by absolute URL from the current site origin, so copies made from localhost or protected preview deployments won’t show the image to recipients.
 
 ---
 
