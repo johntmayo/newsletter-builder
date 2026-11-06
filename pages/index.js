@@ -1216,9 +1216,15 @@ function CustomEntryEditor({ entries, onChange, issueKey, preset }) {
                   </div>
                 ) : null}
                 <div style={{ marginTop: 6, fontSize: 11, color: V.muted, lineHeight: 1.45 }}>
-                  <strong>Links:</strong> paste a web address and it becomes clickable.
+                  <strong>Adding a link:</strong> paste a web address (like altagether.org) and it becomes clickable.
                   <br />
-                  To link your own words instead, use <code>[Register here](altagether.org)</code>
+                  <strong>Want other words to be the link?</strong> Type the words in square brackets, then the web address in parentheses right after, with no space:
+                  <div style={{ margin: "4px 0 0 10px" }}>
+                    You type: <code>[Register here](altagether.org)</code>
+                    <br />
+                    Readers see:{" "}
+                    <span style={{ color: CLAY_HEX, textDecoration: "underline", fontWeight: 700 }}>Register here</span>
+                  </div>
                 </div>
               </div>
               <div className="nl-update-preview" aria-label="How this update will look">
@@ -2450,7 +2456,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
             <div className="nl-step-kicker">Step 2 of 3</div>
             <h2 className="nl-step-title">Choose updates for your neighborhood</h2>
             <p className="nl-step-copy">
-              Share your own zone news under Your zone updates, then click any newsletter card to include it.
+              Write your own zone updates at the top of the list, then click any newsletter card to include it.
             </p>
             {issueStats || preselectedCount > 0 ? (
               <ul className="nl-step-notes">
@@ -2488,7 +2494,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                 }}
               >
-                <span>✎ Your zone updates</span>
+                <span>✎ Write your own zone updates</span>
                 {customEntryCount > 0 && (
                   <span style={{ background: V.clay, color: "#fff", borderRadius: 8, padding: "1px 6px", fontSize: 10, fontWeight: 800 }}>{customEntryCount}</span>
                 )}
