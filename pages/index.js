@@ -132,6 +132,11 @@ function isEntryFromEarlierIssue(entry, issueKey) {
   return Boolean(entry.text) && Boolean(issueKey) && entry.issueKey !== issueKey;
 }
 
+/** Updates carried over from an earlier issue stay out of the newsletter until the captain keeps or edits them. */
+function includedZoneUpdates(entries, issueKey) {
+  return entries.filter((e) => e.text && !isEntryFromEarlierIssue(e, issueKey));
+}
+
 function readBuildHistory() {
   try {
     const parsed = JSON.parse(localStorage.getItem(BUILD_HISTORY_STORAGE_KEY) || "[]");
@@ -1185,14 +1190,14 @@ function CustomEntryEditor({ entries, onChange, issueKey, preset }) {
           <div key={e.id} className="nl-update-card" style={{ borderColor: fromEarlierIssue ? "rgba(245, 158, 11, 0.6)" : undefined }}>
             {fromEarlierIssue ? (
               <div className="nl-update-stale">
-                <span><strong>From your last issue.</strong> Still current?</span>
+                <span><strong>From your last issue, so it&apos;s left out for now.</strong> Still current? Keep it to add it back.</span>
                 <span style={{ display: "flex", gap: 6 }}>
                   <Button variant="secondary" onClick={() => keep(e.id)} style={{ padding: "4px 10px", fontSize: 11 }}>Keep it</Button>
                   <Button variant="danger" onClick={() => remove(e.id)} style={{ padding: "4px 10px", fontSize: 11 }}>Remove</Button>
                 </span>
               </div>
             ) : null}
-            <div className="nl-update-grid">
+            <div className="nl-update-grid" style={fromEarlierIssue ? { opacity: 0.55 } : undefined}>
               <div style={{ minWidth: 0 }}>
                 <input
                   ref={(el) => { fieldRefs.current[`${e.id}:heading`] = el; }}
@@ -1448,9 +1453,9 @@ function WelcomeBackBanner({ welcome, onEditHeader, onReviewUpdates, onDismiss }
         ) : null}
         {carriedUpdates > 0 ? (
           <p className="nl-welcome-back__copy">
-            You have {carriedUpdates} zone {carriedUpdates === 1 ? "update" : "updates"} from last time.{" "}
+            You have {carriedUpdates} zone {carriedUpdates === 1 ? "update" : "updates"} from last time. {carriedUpdates === 1 ? "It's" : "They're"} left out of this issue unless you keep {carriedUpdates === 1 ? "it" : "them"}.{" "}
             <button type="button" className="nl-text-btn" onClick={onReviewUpdates}>
-              Check {carriedUpdates === 1 ? "it's" : "they're"} still current
+              Review {carriedUpdates === 1 ? "it" : "them"}
             </button>
           </p>
         ) : null}
@@ -1856,8 +1861,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
       } catch (_) {}
     }
     const hasSavedDetails = Boolean((config.zone || "").trim() || (config.name || "").trim());
-    const newIssueForReturningCaptain = !(sameIssue && saved) && hasSavedDetails;
-    if (!newIssueForReturningCaptain) {
+    if (sameIssue) {
       setCustomEntries((prev) => prev.map((e) => (e.issueKey ? e : { ...e, issueKey })));
     }
 
@@ -1889,6 +1893,18 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
   useEffect(() => {
     if (step !== 1) setWelcomeBack(null);
   }, [step]);
+
+  const loadedIssueKeyRef = useRef("");
+  useEffect(() => {
+    if (!arrivalHandled || !newsletterData) return;
+    const key = issueDraftStorageSuffix(newsletterData);
+    const previous = loadedIssueKeyRef.current;
+    loadedIssueKeyRef.current = key;
+    if (!previous || previous === key) return;
+    setStep(1);
+    if (newsletterData.sections?.length) setActiveSection(newsletterData.sections[0].id);
+    setDraftNotice(`The ${shortIssueDate(metadataText(newsletterData.date)) || "new"} issue is out, so we loaded it for you.`);
+  }, [arrivalHandled, newsletterData]);
 
   useEffect(() => {
     if (!localDraftLoaded) return;
@@ -2030,7 +2046,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
 
   async function handleCopyForEmail() {
     const selectedBySection = buildSelectedBySection(newsletterData, selectedIds);
-    const customWithText = customEntries.filter((e) => e.text);
+    const customWithText = includedZoneUpdates(customEntries, currentIssueKey);
     const preset = getNewsletterStylePreset(config.stylePreset);
     const clean = preset.id === "clean";
     const emailSectionHeadingStyle = (color) => clean
@@ -2213,10 +2229,11 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
   }
 
   const visibleSelectedCount = countCaptainVisibleSelected(newsletterData, selectedIds);
-  const customEntryCount = customEntries.filter(e => e.text).length;
+  const includedEntries = includedZoneUpdates(customEntries, currentIssueKey);
+  const customEntryCount = includedEntries.length;
   const totalSelected = visibleSelectedCount + customEntryCount;
   const currentPreset = getNewsletterStylePreset(config.stylePreset);
-  const entriesWithBlanks = customEntries.filter((e) => e.text && entryBlanks(e).length);
+  const entriesWithBlanks = includedEntries.filter((e) => entryBlanks(e).length);
   const entriesFromEarlierIssue = customEntries.filter((e) => isEntryFromEarlierIssue(e, currentIssueKey));
   const goToZoneUpdates = () => {
     setStep(1);
@@ -2625,9 +2642,9 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
                 ) : null}
                 {entriesFromEarlierIssue.length ? (
                   <li>
-                    {entriesFromEarlierIssue.length === 1 ? "1 zone update is" : `${entriesFromEarlierIssue.length} zone updates are`} from your last issue.{" "}
+                    {entriesFromEarlierIssue.length === 1 ? "1 zone update" : `${entriesFromEarlierIssue.length} zone updates`} from your last issue {entriesFromEarlierIssue.length === 1 ? "is" : "are"} left out.{" "}
                     <button type="button" className="nl-text-btn" onClick={goToZoneUpdates}>
-                      Check {entriesFromEarlierIssue.length === 1 ? "it's" : "they're"} still current
+                      Review {entriesFromEarlierIssue.length === 1 ? "it" : "them"}
                     </button>
                   </li>
                 ) : null}
@@ -2668,7 +2685,7 @@ function CaptainView({ newsletterData, currentIssueLoading = false }) {
               margin: "0 auto",
             }}
           >
-            <NewsletterPreview config={config} newsletterData={newsletterData} selectedIds={selectedIds} customEntries={customEntries} />
+            <NewsletterPreview config={config} newsletterData={newsletterData} selectedIds={selectedIds} customEntries={includedEntries} />
           </div>
           <div style={{ textAlign: "center", marginTop: 12, fontSize: 12, color: V.muted }}>
             Drafts are saved only in this browser. Use your browser's Print dialog (Ctrl+P / Cmd+P) and choose "Save as PDF" for a PDF file.
@@ -2705,27 +2722,48 @@ export default function App() {
   /** Parsed issue not yet published (admin only) */
   const [unpublishedDraft, setUnpublishedDraft] = useState(null);
 
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
   useEffect(() => {
     injectPrintStyles();
     let cancelled = false;
+    let lastCheck = 0;
+
+    function applyIssue(data) {
+      const normalized = normalizeNewsletterIssueData(data);
+      setNewsletterData((prev) =>
+        prev && issueDraftStorageSuffix(prev) === issueDraftStorageSuffix(normalized) ? prev : normalized,
+      );
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      } catch (_) {}
+    }
+
+    async function fetchLatestIssue() {
+      lastCheck = Date.now();
+      try {
+        const response = await fetch("/api/current-issue", { cache: "no-store" });
+        if (!response.ok) return null;
+        const body = await response.json();
+        return body?.data || null;
+      } catch (_) {
+        return null;
+      }
+    }
+
     (async () => {
       try {
-        try {
-          const response = await fetch("/api/current-issue");
-          if (cancelled) return;
-          if (response.ok) {
-            const body = await response.json();
-            if (body?.data) {
-              const normalized = normalizeNewsletterIssueData(body.data);
-              setNewsletterData(normalized);
-              try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-              } catch (_) {}
-              return;
-            }
-          }
-        } catch (_) {}
+        let latest = await fetchLatestIssue();
+        if (!latest && !cancelled) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          latest = await fetchLatestIssue();
+        }
         if (cancelled) return;
+        if (latest) {
+          applyIssue(latest);
+          return;
+        }
         try {
           const saved = localStorage.getItem(STORAGE_KEY);
           if (saved) setNewsletterData(normalizeNewsletterIssueData(JSON.parse(saved)));
@@ -2734,8 +2772,20 @@ export default function App() {
         if (!cancelled) setCurrentIssueLoading(false);
       }
     })();
+
+    // A tab left open for days should still pick up a newly published issue when the captain returns.
+    async function checkForNewIssue() {
+      if (document.visibilityState !== "visible" || modeRef.current !== "captain") return;
+      if (Date.now() - lastCheck < 60 * 1000) return;
+      const latest = await fetchLatestIssue();
+      if (latest && !cancelled) applyIssue(latest);
+    }
+    document.addEventListener("visibilitychange", checkForNewIssue);
+    window.addEventListener("focus", checkForNewIssue);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", checkForNewIssue);
+      window.removeEventListener("focus", checkForNewIssue);
     };
   }, []);
 
