@@ -95,7 +95,7 @@ Set on **Vercel** (Production / Preview as needed) and in **`.env.local`** for l
    - Value: `{ payload, updated_at }`, where `payload` is the full parsed newsletter object (`title`, `date`, `sections[]`, each with `items[]`, etc.).
 
 2. **Browser `localStorage`** key `altagether_newsletter_data`  
-   - Cache / offline-ish behavior: on load, the app fetches `/api/current-issue`; if that fails or returns empty, it may fall back to localStorage.  
+   - Cache / offline-ish behavior: on load, the app fetches `/api/current-issue` (no-store, one retry); only if both fail does it fall back to localStorage. When a captain returns to an open tab (focus/visibility, at most once a minute), it re-checks and swaps in a newly published issue automatically, moving them to Select content with a short notice.  
    - Updated when a **published** issue is loaded from the API or after a successful **Publish for all visitors** — not when an admin only parses a draft.
 
 3. **Unpublished admin draft** (in-memory only)  
@@ -143,14 +143,14 @@ The parser (`lib/parseNewsletterHtml.js`) targets **MailerLite-style** exports a
 
 1. **Make it yours** — Style preset (Newsprint / Modern) and optional header photo from the curated library first, then newsletter name, tagline, zone, one or more **Captain / How to contact** rows (+ add captain), and optional zone links (websites/social — **shown in output with no label**). A sticky live preview of the masthead (`NewsletterMasthead`, shared with the full preview) updates as they type.  
 2. **Select content** — **Your zone updates** sits at the top of the section rail, then the master newsletter sections; toggles selection by item `id`. Items with `_adminHidden` are hidden. Items with `_adminRecommended` show a "★ Recommended" tag and are pre-checked when the captain has no saved selection for that issue. Zone update text auto-links bare web addresses; `[words](url)` still works for custom link text.  
-   - **Zone update editor:** starter templates (block meeting, welcome neighbors, thank-you, local event, blank) fill in text with `[blanks]`. Any `[text]` *not* followed by `(url)` counts as a blank: it's highlighted, listed as "Fill in" chips that select it, and flagged on step 3. Each update has a side-by-side "How it will look" preview. Updates whose `issueKey` isn't the current issue show "From your last issue. Still current?" (Keep it / Remove); editing also confirms them. They're still included in output until removed.
+   - **Zone update editor:** starter templates (block meeting, welcome neighbors, thank-you, local event, blank) fill in text with `[blanks]`. Any `[text]` *not* followed by `(url)` counts as a blank: it's highlighted, listed as "Fill in" chips that select it, and flagged on step 3. Each update has a side-by-side "How it will look" preview. Updates whose `issueKey` isn't the current issue are shown faded with "From your last issue, so it's left out for now" (Keep it / Remove) and are **left out** of preview, PDF, email, and counts until the captain keeps or edits them (`includedZoneUpdates`). This was changed after captains were confused by last week's updates appearing in a new issue.
    - A small note shows how many captains have shared this issue (from `/api/issue-stats`; hidden if unavailable).
 3. **Preview & print** — Composes header, optional zone-specific updates block (**one** section title: `{zone} Updates` or fallback), then selected master items. A "Before you send" box flags unfilled blanks and updates from an earlier issue. **Print** uses `#print-root` and injected print CSS so the header stays legible when backgrounds are not printed (dark text on white in `@media print`).
 4. **Finish screen** — After a successful copy or print, a dialog shows "Your {zone} newsletter is ready!", a story/update summary, the captain's streak (from `altagether_build_history`; consecutive if the issue date matches the previous issue's "next issue" date within 4 days, or is within 21 days of it), the shared-by count, and a next-steps checklist (copy: paste, subject line, BCC, send; print: save/share/hand out).
 
 **Copy for email** builds multipart HTML + plain text with the same structural choices as preview.
 
-**Returning captains:** If the saved builder state is for the current issue, the captain resumes where they left off. If it's a new issue and they have a saved zone or newsletter name, they skip setup and land on **Select content** with a "Welcome back" banner; a non-empty newsletter date is refreshed to today, and carried-over zone updates get a "check they're still current" link. First-time visitors start on step 1.
+**Returning captains:** If the saved builder state is for the current issue, the captain resumes where they left off. If it's a new issue and they have a saved zone or newsletter name, they skip setup and land on **Select content** with a "Welcome back" banner; a non-empty newsletter date is refreshed to today, and the banner says carried-over zone updates are left out unless kept, with a "Review them" link. First-time visitors start on step 1.
 
 ---
 
